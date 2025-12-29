@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+  line-height: 1.45;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+ion-alert.musicas-select-alert-small .alert-radio-label,
+ion-alert.musicas-select-alert-small .alert-checkbox-label {
+  font-size: 14px;
+}
+
+ion-popover.musicas-select-popover-small ion-item,
+ion-popover.musicas-select-popover-small ion-label {
+  font-size: 14px;
+}
+
+ion-datetime-button.datetime-button-small::part(native) {
+  font-size: 11px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 10px;
+}
+
+
+

@@ -1,0 +1,42 @@
+/* Card clean */
+.login-page .login-card {
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+}
+
+/* Segment discreto */
+.login-page .login-segment {
+  --background: rgba(2, 132, 199, 0.08);
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.login-page ion-segment-button {
+  --border-radius: 10px;
+}
+
+/* Inputs compactos e modernos */
+.login-page .login-input {
+  font-size: 14px;
+  --border-radius: 12px;
+  --padding-top: 10px;
+  --padding-bottom: 10px;
+}
+
+/* Botão do olho bem discreto */
+.login-page .login-eye-btn {
+  margin: 0;
+  height: 28px;
+  width: 28px;
+}
+
+/* CTA principal */
+.login-page .login-submit {
+  margin-top: 6px;
+}
+
+/* Link discreto */
+.login-page .login-link {
+  --padding-start: 6px;
+  --padding-end: 6px;
+}
