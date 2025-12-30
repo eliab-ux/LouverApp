@@ -4,6 +4,7 @@ import { IonApp } from '@ionic/react'
 import { IonReactRouter } from '@ionic/react-router'
 import { supabase } from './lib/supabase'
 import { InlineToastProvider } from './lib/inlineToast'
+import { applyTheme, getSavedTheme } from './theme/theme'
 import type { AppUser } from './types'
 import { Login } from './pages/Login'
 import { ResetPassword } from './pages/ResetPassword'
@@ -12,7 +13,7 @@ import { Dashboard } from './pages/Dashboard'
 
 function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-white font-sans">
+    <div className="min-h-screen w-full overflow-x-hidden bg-slate-50 text-slate-900 dark:bg-[#0B1220] dark:text-slate-100 font-sans">
       <div className="mx-auto w-full max-w-[980px] px-4 sm:px-6 lg:px-8 py-4">{children}</div>
     </div>
   )
@@ -22,6 +23,16 @@ function App() {
   const [appUser, setAppUser] = useState<AppUser | null>(null)
   const [loadingSession, setLoadingSession] = useState(true)
   const [sessionError, setSessionError] = useState<string | null>(null)
+
+  useEffect(() => {
+    applyTheme(getSavedTheme())
+
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = () => applyTheme(getSavedTheme())
+
+    mq.addEventListener?.('change', handler)
+    return () => mq.removeEventListener?.('change', handler)
+  }, [])
 
   const carregarSessao = async () => {
     setLoadingSession(true)
@@ -47,7 +58,7 @@ function App() {
 
       const { data: usuario, error: usuarioError } = await supabase
         .from('usuarios')
-        .select('id, nome, email, papel, igreja_id')
+        .select('id, nome, email, telefone, papel, igreja_id')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -67,7 +78,7 @@ function App() {
 
       const { data: igreja, error: igrejaError } = await supabase
         .from('igrejas')
-        .select('id, nome')
+        .select('id, nome, cnpj')
         .eq('id', usuario.igreja_id)
         .maybeSingle()
 
@@ -81,9 +92,11 @@ function App() {
         id: usuario.id,
         email: usuario.email,
         nome: usuario.nome,
+        telefone: usuario.telefone ?? null,
         papel: usuario.papel,
         igrejaId: usuario.igreja_id,
         igrejaNome: igreja?.nome ?? null,
+        igrejaCnpj: ((igreja as unknown as { cnpj?: string | null } | null)?.cnpj ?? null) || null,
       })
     } catch (e) {
       console.error(e)

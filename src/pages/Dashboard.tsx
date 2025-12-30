@@ -47,6 +47,9 @@ import type {
 import { Musicas } from './Musicas'
 import { AdminPanel } from './AdminPanel'
 import { Escala } from './Escala'
+import { ThemeSelectRow } from '../components/ThemeSelectRow'
+import { MeuPerfil } from './MeuPerfil'
+import { DadosIgreja } from './DadosIgreja'
 
 type EscalaMusica = {
   id: string
@@ -322,7 +325,7 @@ function DashboardTabPageFrame({
         <IonToolbar>
           <div className="flex items-center justify-between gap-3 px-3 py-2">
             <IonButtons slot="start">
-              {(user.papel === 'admin' || user.papel === 'lider') && <IonMenuButton menu="admin-menu" />}
+              <IonMenuButton menu="admin-menu" />
             </IonButtons>
 
             <div className="min-w-0 flex-1">
@@ -346,7 +349,7 @@ function DashboardTabPageFrame({
       </IonHeader>
 
       <IonContent fullscreen>
-        <div className="w-full min-h-[calc(100vh-2rem)] rounded-2xl bg-slate-950 text-slate-100 px-4 py-4">
+        <div className="w-full min-h-[calc(100vh-2rem)] rounded-2xl bg-slate-50 text-slate-900 dark:bg-[#0B1220] dark:text-slate-100 px-4 py-4">
           {children}
         </div>
       </IonContent>
@@ -834,79 +837,97 @@ export function Dashboard({ user }: { user: AppUser }) {
 
   return (
     <>
-      {(user.papel === 'admin' || user.papel === 'lider') && (
-        <IonMenu menuId="admin-menu" contentId="app-content" side="start">
-          <IonHeader>
-            <IonToolbar>
-              <IonTitle>Administração</IonTitle>
-            </IonToolbar>
-          </IonHeader>
-          <IonContent>
-            <IonList>
+      <IonMenu menuId="admin-menu" contentId="app-content" side="start">
+        <IonHeader>
+          <IonToolbar>
+            <IonTitle>Menu</IonTitle>
+          </IonToolbar>
+        </IonHeader>
+        <IonContent>
+          <IonList>
+            <ThemeSelectRow />
+
+            <IonMenuToggle autoHide={false}>
+              <IonItem button detail={false} routerLink="/app/meu-perfil">
+                <IonLabel>Meu Perfil</IonLabel>
+              </IonItem>
+            </IonMenuToggle>
+
+            {user.papel === 'admin' && (
               <IonMenuToggle autoHide={false}>
-                <IonItem
-                  button
-                  detail={false}
-                  routerLink="/app/admin?section=categorias"
-                  onClick={() => setAdminInitialSection('categorias')}
-                >
-                  <IonLabel>Categorias</IonLabel>
+                <IonItem button detail={false} routerLink="/app/dados-igreja">
+                  <IonLabel>Dados da Igreja</IonLabel>
                 </IonItem>
               </IonMenuToggle>
-              <IonMenuToggle autoHide={false}>
-                <IonItem
-                  button
-                  detail={false}
-                  routerLink="/app/admin?section=momentos"
-                  onClick={() => setAdminInitialSection('momentos')}
-                >
-                  <IonLabel>Momentos de culto</IonLabel>
-                </IonItem>
-              </IonMenuToggle>
-              <IonMenuToggle autoHide={false}>
-                <IonItem
-                  button
-                  detail={false}
-                  routerLink="/app/admin?section=estilos"
-                  onClick={() => setAdminInitialSection('estilos')}
-                >
-                  <IonLabel>Estilos</IonLabel>
-                </IonItem>
-              </IonMenuToggle>
-              <IonMenuToggle autoHide={false}>
-                <IonItem
-                  button
-                  detail={false}
-                  routerLink="/app/admin?section=membros"
-                  onClick={() => setAdminInitialSection('membros')}
-                >
-                  <IonLabel>Membros</IonLabel>
-                </IonItem>
-              </IonMenuToggle>
-              <IonMenuToggle autoHide={false}>
-                <IonItem
-                  button
-                  detail={false}
-                  routerLink="/app/admin?section=importar"
-                  onClick={() => setAdminInitialSection('importar')}
-                >
-                  <IonLabel>Importar CSV</IonLabel>
-                </IonItem>
-              </IonMenuToggle>
-              <IonMenuToggle autoHide={false}>
-                <IonItem
-                  button
-                  detail={false}
-                  routerLink="/app/admin?section=notificacoes"
-                  onClick={() => setAdminInitialSection('notificacoes')}
-                >
-                  <IonLabel>Notificações</IonLabel>
-                </IonItem>
-              </IonMenuToggle>
-            </IonList>
-          </IonContent>
-        </IonMenu>
-      )}
+            )}
+
+            {(user.papel === 'admin' || user.papel === 'lider') && (
+              <>
+                <IonMenuToggle autoHide={false}>
+                  <IonItem
+                    button
+                    detail={false}
+                    routerLink="/app/admin?section=categorias"
+                    onClick={() => setAdminInitialSection('categorias')}
+                  >
+                    <IonLabel>Categorias</IonLabel>
+                  </IonItem>
+                </IonMenuToggle>
+                <IonMenuToggle autoHide={false}>
+                  <IonItem
+                    button
+                    detail={false}
+                    routerLink="/app/admin?section=momentos"
+                    onClick={() => setAdminInitialSection('momentos')}
+                  >
+                    <IonLabel>Momentos de culto</IonLabel>
+                  </IonItem>
+                </IonMenuToggle>
+                <IonMenuToggle autoHide={false}>
+                  <IonItem
+                    button
+                    detail={false}
+                    routerLink="/app/admin?section=estilos"
+                    onClick={() => setAdminInitialSection('estilos')}
+                  >
+                    <IonLabel>Estilos</IonLabel>
+                  </IonItem>
+                </IonMenuToggle>
+                <IonMenuToggle autoHide={false}>
+                  <IonItem
+                    button
+                    detail={false}
+                    routerLink="/app/admin?section=membros"
+                    onClick={() => setAdminInitialSection('membros')}
+                  >
+                    <IonLabel>Membros</IonLabel>
+                  </IonItem>
+                </IonMenuToggle>
+                <IonMenuToggle autoHide={false}>
+                  <IonItem
+                    button
+                    detail={false}
+                    routerLink="/app/admin?section=importar"
+                    onClick={() => setAdminInitialSection('importar')}
+                  >
+                    <IonLabel>Importar CSV</IonLabel>
+                  </IonItem>
+                </IonMenuToggle>
+                <IonMenuToggle autoHide={false}>
+                  <IonItem
+                    button
+                    detail={false}
+                    routerLink="/app/admin?section=notificacoes"
+                    onClick={() => setAdminInitialSection('notificacoes')}
+                  >
+                    <IonLabel>Notificações</IonLabel>
+                  </IonItem>
+                </IonMenuToggle>
+              </>
+            )}
+          </IonList>
+        </IonContent>
+      </IonMenu>
 
       <IonTabs>
       <IonRouterOutlet id="app-content" ionPage>
@@ -949,6 +970,7 @@ export function Dashboard({ user }: { user: AppUser }) {
           <Route
             path="/app/admin"
             render={() => (
+              user.papel === 'admin' || user.papel === 'lider' ? (
               <DashboardTabPageFrame
                 user={user}
                 handleSignOut={() => void handleSignOut()}
@@ -964,6 +986,31 @@ export function Dashboard({ user }: { user: AppUser }) {
                   onEstilosChange={carregarEstilos}
                 />
               </DashboardTabPageFrame>
+              ) : (
+                <Redirect to="/app/inicio" />
+              )
+            )}
+          />
+          <Route
+            exact
+            path="/app/meu-perfil"
+            render={() => (
+              <DashboardTabPageFrame user={user} handleSignOut={() => void handleSignOut()}>
+                <MeuPerfil user={user} />
+              </DashboardTabPageFrame>
+            )}
+          />
+          <Route
+            exact
+            path="/app/dados-igreja"
+            render={() => (
+              user.papel === 'admin' ? (
+                <DashboardTabPageFrame user={user} handleSignOut={() => void handleSignOut()}>
+                  <DadosIgreja user={user} />
+                </DashboardTabPageFrame>
+              ) : (
+                <Redirect to="/app/inicio" />
+              )
             )}
           />
           <Redirect exact from="/app" to="/app/inicio" />

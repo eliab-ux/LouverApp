@@ -1,10 +1,24 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type PointerEvent } from 'react'
-import { createPortal } from 'react-dom'
-import { IonAlert } from '@ionic/react'
-import { IonButton, IonIcon } from '@ionic/react'
-import { createOutline, trashOutline } from 'ionicons/icons'
+import {
+  IonAccordion,
+  IonAccordionGroup,
+  IonAlert,
+  IonButton,
+  IonCard,
+  IonCardContent,
+  IonCardHeader,
+  IonCardSubtitle,
+  IonIcon,
+  IonInput,
+  IonItem,
+  IonLabel,
+  IonSelect,
+  IonSelectOption,
+} from '@ionic/react'
+import { checkmarkOutline, chevronBackOutline, chevronForwardOutline, closeOutline, createOutline, trashOutline } from 'ionicons/icons'
 import { supabase } from '../../lib/supabase'
 import type { AppUser } from '../../types'
+import { maskPhoneBR, unmask } from '../../utils/phoneMask'
 
 export type Membro = {
   id: string
@@ -28,14 +42,18 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
   const [novoMembroPapel, setNovoMembroPapel] = useState<'membro' | 'lider' | 'admin'>('membro')
   const [savingMembro, setSavingMembro] = useState(false)
   const [novoMembroFuncoes, setNovoMembroFuncoes] = useState<string[]>([])
-  const [novoMembroTelefone, setNovoMembroTelefone] = useState('')
+  const [novoMembroTelefoneMasked, setNovoMembroTelefoneMasked] = useState('')
+  const [novoMembroTelefoneDigits, setNovoMembroTelefoneDigits] = useState('')
 
   const itensPorPagina = 5
   const [paginaMembro, setPaginaMembro] = useState(1)
   const [filtroPapel, setFiltroPapel] = useState<'todos' | 'admin' | 'lider' | 'membro'>('todos')
 
   const [editandoMembroId, setEditandoMembroId] = useState<string | null>(null)
-  const [editandoMembro, setEditandoMembro] = useState<Membro | null>(null)
+  const [editandoMembroNome, setEditandoMembroNome] = useState('')
+  const [editandoMembroEmail, setEditandoMembroEmail] = useState('')
+  const [editandoMembroTelefoneMasked, setEditandoMembroTelefoneMasked] = useState('')
+  const [editandoMembroTelefoneDigits, setEditandoMembroTelefoneDigits] = useState('')
   const [editandoMembroPapel, setEditandoMembroPapel] = useState<'admin' | 'lider' | 'membro'>('membro')
   const [editandoMembroFuncoes, setEditandoMembroFuncoes] = useState<string[]>([])
 
@@ -44,28 +62,10 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
   const [confirmDialogMessage, setConfirmDialogMessage] = useState('')
   const [confirmDialogOnConfirm, setConfirmDialogOnConfirm] = useState<null | (() => Promise<void>)>(null)
 
-  const [modalRoot, setModalRoot] = useState<HTMLElement | null>(null)
-
   const lastTouchActionAtRef = useRef(0)
   const blockClicksUntilRef = useRef(0)
 
   const shouldIgnoreClickBecauseTouch = () => Date.now() - lastTouchActionAtRef.current < 700
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-    const id = 'louvorapp-modal-root'
-    let el = document.getElementById(id) as HTMLElement | null
-    if (!el) {
-      el = document.createElement('div')
-      el.id = id
-      document.body.appendChild(el)
-    } else if (el.parentElement !== document.body) {
-      document.body.appendChild(el)
-    }
-    el.style.position = 'relative'
-    el.style.zIndex = '2147483647'
-    setModalRoot(el)
-  }, [])
 
   useEffect(() => {
     const handler = (ev: MouseEvent) => {
@@ -161,6 +161,11 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
       return
     }
 
+    if (!novoMembroNome.trim()) {
+      setMembrosError('Informe o nome do novo membro.')
+      return
+    }
+
     try {
       setSavingMembro(true)
       setMembrosError(null)
@@ -168,10 +173,10 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
       const { data, error } = await supabase.functions.invoke('invite_user_admin', {
         body: {
           email: novoMembroEmail.trim(),
-          nome: novoMembroNome.trim() || null,
+          nome: novoMembroNome.trim(),
           papel: novoMembroPapel,
           funcoes: novoMembroFuncoes,
-          telefone: novoMembroTelefone.trim() || null,
+          telefone: novoMembroTelefoneDigits.trim() || null,
           igreja_id: user.igrejaId,
         },
       })
@@ -195,7 +200,8 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
       setNovoMembroNome('')
       setNovoMembroPapel('membro')
       setNovoMembroFuncoes([])
-      setNovoMembroTelefone('')
+      setNovoMembroTelefoneMasked('')
+      setNovoMembroTelefoneDigits('')
       await carregarMembros()
     } catch (e) {
       console.error(e)
@@ -208,17 +214,74 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
   // Iniciar edição de membro
   const iniciarEdicaoMembro = (membro: Membro) => {
     setEditandoMembroId(membro.id)
-    setEditandoMembro(membro)
     setEditandoMembroPapel(membro.papel)
     setEditandoMembroFuncoes(membro.funcoes ?? [])
+    setEditandoMembroNome(membro.nome ?? '')
+    setEditandoMembroEmail(membro.email ?? '')
+    const masked = maskPhoneBR(String(membro.telefone ?? ''))
+    setEditandoMembroTelefoneMasked(masked)
+    setEditandoMembroTelefoneDigits(unmask(masked))
   }
 
   // Cancelar edição de membro
   const cancelarEdicaoMembro = () => {
     setEditandoMembroId(null)
-    setEditandoMembro(null)
     setEditandoMembroPapel('membro')
     setEditandoMembroFuncoes([])
+    setEditandoMembroNome('')
+    setEditandoMembroEmail('')
+    setEditandoMembroTelefoneMasked('')
+    setEditandoMembroTelefoneDigits('')
+  }
+
+  const salvarEdicaoMembro = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!editandoMembroId) return
+    if (!editandoMembroEmail.trim()) {
+      setMembrosError('Informe um email válido para o membro.')
+      return
+    }
+
+    try {
+      setSavingMembro(true)
+      setMembrosError(null)
+
+      const funcoesToSave = editandoMembroFuncoes.length > 0
+        ? Array.from(new Set(editandoMembroFuncoes)).sort()
+        : null
+
+      const { data, error } = await supabase
+        .from('usuarios')
+        .update({
+          nome: editandoMembroNome.trim() || null,
+          email: editandoMembroEmail.trim(),
+          telefone: editandoMembroTelefoneDigits.trim() || null,
+          papel: editandoMembroPapel,
+          funcoes: funcoesToSave,
+        })
+        .eq('id', editandoMembroId)
+        .select('id, nome, email, telefone, papel, funcoes')
+        .maybeSingle()
+
+      if (error) {
+        setMembrosError(`Erro ao atualizar membro: ${error.message}`)
+        return
+      }
+
+      if (!data) {
+        setMembrosError('Sem permissão para atualizar este membro.')
+        await carregarMembros()
+        return
+      }
+
+      cancelarEdicaoMembro()
+      await carregarMembros()
+    } catch (e) {
+      console.error(e)
+      setMembrosError('Erro ao atualizar membro.')
+    } finally {
+      setSavingMembro(false)
+    }
   }
 
   // Remover membro da igreja
@@ -233,17 +296,71 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
       setSavingMembro(true)
       setMembrosError(null)
 
-      // Remove o membro definindo igreja_id como null
-      const { error } = await supabase.from('usuarios').update({ igreja_id: null }).eq('id', membroId)
+      // 🔍 DEBUG: Logar contexto antes do UPDATE
+      console.group('🔍 DEBUG: Tentando remover membro')
+      console.log('Meu ID:', user.id)
+      console.log('Meu papel:', user.papel)
+      console.log('Minha igreja_id:', user.igrejaId)
+      console.log('ID do membro a remover:', membroId)
+
+      // Verificar sessão atual do Supabase
+      const { data: session } = await supabase.auth.getSession()
+      console.log('📝 Sessão atual:', {
+        user_id: session?.session?.user?.id,
+        email: session?.session?.user?.email,
+        role: session?.session?.user?.role,
+        token_expira_em: session?.session?.expires_at,
+      })
+
+      // Buscar dados do membro antes de remover
+      const { data: membroAntes, error: errorBusca } = await supabase
+        .from('usuarios')
+        .select('id, nome, email, papel, igreja_id')
+        .eq('id', membroId)
+        .single()
+
+      if (errorBusca) {
+        console.error('❌ Erro ao buscar dados do membro:', errorBusca)
+      } else {
+        console.log('Dados do membro antes:', membroAntes)
+      }
+
+      // Remove o membro usando RPC (contorna problema de RLS)
+      console.log('📤 Chamando RPC admin_remover_membro para usuário', membroId)
+      const { data, error, status, statusText } = await supabase.rpc('admin_remover_membro', {
+        p_membro_id: membroId,
+      })
+
+      console.log('📥 Resposta do Supabase:')
+      console.log('  - Status:', status, statusText)
+      console.log('  - Data:', data)
+      console.log('  - Error:', error)
 
       if (error) {
+        console.error('❌ ERRO COMPLETO:', JSON.stringify(error, null, 2))
+        console.groupEnd()
         setMembrosError(`Erro ao remover membro: ${error.message}`)
         return
       }
 
+      // Verificar resultado da RPC
+      if (data && typeof data === 'object' && 'success' in data) {
+        if (data.success === false) {
+          console.error('❌ RPC retornou erro:', data)
+          console.groupEnd()
+          setMembrosError(`Erro: ${(data as { error?: string }).error || 'Erro desconhecido'}`)
+          return
+        }
+        console.log('✅ Resultado da RPC:', data)
+      }
+
+      console.log('✅ Membro removido com sucesso!')
+      console.groupEnd()
+
       await carregarMembros()
     } catch (e) {
-      console.error(e)
+      console.error('❌ EXCEPTION:', e)
+      console.groupEnd()
       setMembrosError('Erro ao remover membro.')
     } finally {
       setSavingMembro(false)
@@ -267,23 +384,23 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
             <p className="text-[11px] text-slate-400">Gerencie os membros e seus perfis</p>
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-[10px] text-slate-400" htmlFor="filtroPapel">
-              Filtrar:
-            </label>
-            <select
-              id="filtroPapel"
-              value={filtroPapel}
-              onChange={(e) => {
-                setFiltroPapel(e.target.value as 'todos' | 'admin' | 'lider' | 'membro')
-                setPaginaMembro(1)
-              }}
-              className="rounded-xl border border-slate-700/70 bg-slate-900/80 px-3 py-2 text-[11px] text-slate-50 outline-none focus:ring-1 focus:ring-emerald-500"
-            >
-              <option value="todos">Todos</option>
-              <option value="admin">Admin</option>
-              <option value="lider">Líder</option>
-              <option value="membro">Membro</option>
-            </select>
+            <IonItem lines="none" className="rounded-xl" style={{ '--background': 'transparent' } as unknown as Record<string, string>}>
+              <IonLabel className="text-[10px] text-slate-400">Filtrar</IonLabel>
+              <IonSelect
+                interface="popover"
+                value={filtroPapel}
+                onIonChange={(e) => {
+                  const next = String(e.detail.value ?? 'todos') as 'todos' | 'admin' | 'lider' | 'membro'
+                  setFiltroPapel(next)
+                  setPaginaMembro(1)
+                }}
+              >
+                <IonSelectOption value="todos">Todos</IonSelectOption>
+                <IonSelectOption value="admin">Admin</IonSelectOption>
+                <IonSelectOption value="lider">Líder</IonSelectOption>
+                <IonSelectOption value="membro">Membro</IonSelectOption>
+              </IonSelect>
+            </IonItem>
           </div>
         </div>
 
@@ -316,137 +433,257 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                   </p>
                   <div className="space-y-2 max-h-[520px] overflow-y-auto">
                     {membrosPaginados.map((membro) => (
-                      <div
+                      <IonCard
                         key={membro.id}
-                        className={`rounded-2xl bg-slate-950/30 px-4 py-3 text-xs shadow-sm transition-colors ring-1 ${
+                        className={`m-0 rounded-2xl bg-slate-950/30 text-xs shadow-sm transition-colors ring-1 ${
                           editandoMembroId === membro.id
                             ? 'ring-emerald-500/50'
                             : 'ring-slate-800/60 hover:bg-slate-900/40'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-semibold text-slate-100 truncate">
-                              {membro.nome || 'Sem nome'}
-                              {membro.id === user.id && (
-                                <span className="ml-1 text-[10px] text-emerald-400">(você)</span>
-                              )}
-                            </p>
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                              <span className="truncate">📧 {membro.email || '-'}</span>
-                              {membro.telefone && <span className="truncate">📱 {membro.telefone}</span>}
-                            </div>
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <span
-                                className={`text-[10px] px-2 py-0.5 rounded-full ${
-                                  membro.papel === 'admin'
-                                    ? 'bg-red-500/20 text-red-300'
-                                    : membro.papel === 'lider'
-                                      ? 'bg-amber-500/20 text-amber-300'
-                                      : 'bg-slate-500/20 text-slate-300'
-                                }`}
-                              >
-                                {membro.papel === 'admin' ? 'Admin' : membro.papel === 'lider' ? 'Líder' : 'Membro'}
-                              </span>
-                              {membro.funcoes && membro.funcoes.length > 0 && (
-                                <div className="flex flex-wrap gap-1">
-                                  {membro.funcoes.map((f) => (
-                                    <span
-                                      key={f}
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/70 text-slate-200 text-[10px]"
-                                    >
-                                      {f === 'voz' ? '🎤' : f === 'musico' ? '🎸' : '•'}
-                                      <span>{f === 'voz' ? 'Voz' : f === 'musico' ? 'Músico' : f}</span>
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
+                        {editandoMembroId === membro.id ? (
+                          <IonCardContent className="p-3">
+                            <form onSubmit={salvarEdicaoMembro} className="space-y-2 text-xs">
+                              <div>
+                                <IonInput
+                                  value={editandoMembroNome}
+                                  onIonInput={(e) => setEditandoMembroNome(String(e.detail.value ?? ''))}
+                                  placeholder="Nome"
+                                  style={{ fontSize: '10.5px' }}
+                                />
+                              </div>
 
-                          <div className="flex items-center gap-2">
-                            <IonButton
-                              type="button"
-                              fill="clear"
-                              size="small"
-                              onPointerDown={(e) => {
-                                deferTouchAction(e, () => iniciarEdicaoMembro(membro))
-                              }}
-                              onClick={(e) => {
-                                if (e.detail !== 0) return
-                                if (shouldIgnoreClickBecauseTouch()) return
-                                iniciarEdicaoMembro(membro)
-                              }}
-                              aria-label="Editar membro"
-                              title="Editar membro"
-                              className="m-0 h-7"
-                            >
-                              <IonIcon slot="icon-only" icon={createOutline} />
-                            </IonButton>
-                            {membro.id !== user.id && (
-                              <IonButton
-                                type="button"
-                                fill="clear"
-                                size="small"
-                                color="danger"
-                                onPointerDown={(e) => {
-                                  deferTouchAction(e, () =>
-                                    abrirConfirmacao({
-                                      title: 'Remover membro',
-                                      message: `Tem certeza que deseja remover ${membro.nome || membro.email || 'este membro'} da igreja? Esta ação não pode ser desfeita.`,
-                                      actionLabel: 'Remover',
-                                      onConfirm: async () => {
-                                        await removerMembro(membro.id)
-                                      },
-                                    }),
-                                  )
-                                }}
-                                onClick={(e) => {
-                                  if (e.detail !== 0) return
-                                  if (shouldIgnoreClickBecauseTouch()) return
-                                  abrirConfirmacao({
-                                    title: 'Remover membro',
-                                    message: `Tem certeza que deseja remover ${membro.nome || membro.email || 'este membro'} da igreja? Esta ação não pode ser desfeita.`,
-                                    actionLabel: 'Remover',
-                                    onConfirm: async () => {
-                                      await removerMembro(membro.id)
-                                    },
-                                  })
-                                }}
-                                aria-label="Remover da igreja"
-                                title="Remover da igreja"
-                                className="m-0 h-7"
-                              >
-                                <IonIcon slot="icon-only" icon={trashOutline} />
-                              </IonButton>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <span className="block text-[11px] mb-1 font-semibold" style={{ fontWeight: 700 }}>Email</span>
+                                  <IonInput
+                                    value={editandoMembroEmail}
+                                    type="email"
+                                    inputMode="email"
+                                    autocomplete="email"
+                                    onIonInput={(e) => setEditandoMembroEmail(String(e.detail.value ?? ''))}
+                                    style={{ fontSize: '10.5px' }}
+                                  />
+                                </div>
+                                <div>
+                                  <span className="block text-[11px] mb-1 font-semibold" style={{ fontWeight: 700 }}>Telefone</span>
+                                  <IonInput
+                                    value={editandoMembroTelefoneMasked}
+                                    type="tel"
+                                    inputMode="tel"
+                                    autocomplete="tel"
+                                    onIonInput={(e) => {
+                                      const raw = String(e.detail.value ?? '')
+                                      const digitsOnly = raw.replace(/\D/g, '')
+                                      const masked = maskPhoneBR(digitsOnly)
+                                      setEditandoMembroTelefoneMasked(masked)
+                                      setEditandoMembroTelefoneDigits(unmask(masked))
+                                    }}
+                                    style={{ fontSize: '10.5px' }}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <span className="block text-[11px] mb-1 font-semibold" style={{ fontWeight: 700 }}>Papel</span>
+                                  <IonSelect
+                                    interface="popover"
+                                    value={editandoMembroPapel}
+                                    onIonChange={(e) => {
+                                      setEditandoMembroPapel(String(e.detail.value ?? 'membro') as 'admin' | 'lider' | 'membro')
+                                    }}
+                                    style={{ fontSize: '10.5px' }}
+                                  >
+                                    <IonSelectOption value="membro">Membro</IonSelectOption>
+                                    <IonSelectOption value="lider">Líder</IonSelectOption>
+                                    <IonSelectOption value="admin">Admin</IonSelectOption>
+                                  </IonSelect>
+                                </div>
+                                <div>
+                                  <span className="block text-[11px] mb-1 font-semibold" style={{ fontWeight: 700 }}>Funções</span>
+                                  <IonSelect
+                                    multiple
+                                    interface="alert"
+                                    interfaceOptions={{
+                                      header: 'Funções',
+                                      subHeader: 'Selecione uma ou mais funções',
+                                    }}
+                                    value={editandoMembroFuncoes}
+                                    onIonChange={(e) => setEditandoMembroFuncoes((e.detail.value as string[]) ?? [])}
+                                    style={{ fontSize: '10.5px' }}
+                                  >
+                                    <IonSelectOption value="voz">Voz</IonSelectOption>
+                                    <IonSelectOption value="musico">Músico</IonSelectOption>
+                                  </IonSelect>
+                                </div>
+                              </div>
+
+                              <div className="flex justify-end gap-2 mt-1">
+                                <IonButton
+                                  type="button"
+                                  fill="clear"
+                                  size="small"
+                                  onClick={cancelarEdicaoMembro}
+                                  disabled={savingMembro}
+                                  aria-label="Cancelar edição"
+                                  className="m-0 h-7"
+                                >
+                                  <IonIcon slot="icon-only" icon={closeOutline} />
+                                </IonButton>
+                                <IonButton
+                                  type="submit"
+                                  fill="clear"
+                                  size="small"
+                                  disabled={savingMembro}
+                                  aria-label="Salvar edição"
+                                  className="m-0 h-7"
+                                >
+                                  <IonIcon slot="icon-only" icon={checkmarkOutline} />
+                                </IonButton>
+                              </div>
+                            </form>
+                          </IonCardContent>
+                        ) : (
+                          <>
+                            <IonCardHeader className="pb-2">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-[13px] font-semibold text-slate-100 truncate">
+                                    {membro.nome || 'Sem nome'}
+                                    {membro.id === user.id && (
+                                      <span className="ml-1 text-[10px] text-emerald-400">(você)</span>
+                                    )}
+                                  </p>
+                                  <IonCardSubtitle className="mt-1">
+                                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                                      <span className="truncate">📧 {membro.email || '-'}</span>
+                                      {membro.telefone && <span className="truncate">📱 {maskPhoneBR(membro.telefone)}</span>}
+                                    </div>
+                                  </IonCardSubtitle>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <IonButton
+                                    type="button"
+                                    fill="clear"
+                                    size="small"
+                                    onPointerDown={(e) => {
+                                      deferTouchAction(e, () => iniciarEdicaoMembro(membro))
+                                    }}
+                                    onClick={(e) => {
+                                      if (e.detail !== 0) return
+                                      if (shouldIgnoreClickBecauseTouch()) return
+                                      iniciarEdicaoMembro(membro)
+                                    }}
+                                    aria-label="Editar membro"
+                                    title="Editar membro"
+                                    className="m-0 h-7"
+                                  >
+                                    <IonIcon slot="icon-only" icon={createOutline} />
+                                  </IonButton>
+                                  {membro.id !== user.id && (
+                                    <IonButton
+                                      type="button"
+                                      fill="clear"
+                                      size="small"
+                                      color="danger"
+                                      onPointerDown={(e) => {
+                                        deferTouchAction(e, () =>
+                                          abrirConfirmacao({
+                                            title: 'Remover membro',
+                                            message: `Tem certeza que deseja remover ${membro.nome || membro.email || 'este membro'} da igreja? Esta ação não pode ser desfeita.`,
+                                            actionLabel: 'Remover',
+                                            onConfirm: async () => {
+                                              await removerMembro(membro.id)
+                                            },
+                                          }),
+                                        )
+                                      }}
+                                      onClick={(e) => {
+                                        if (e.detail !== 0) return
+                                        if (shouldIgnoreClickBecauseTouch()) return
+                                        abrirConfirmacao({
+                                          title: 'Remover membro',
+                                          message: `Tem certeza que deseja remover ${membro.nome || membro.email || 'este membro'} da igreja? Esta ação não pode ser desfeita.`,
+                                          actionLabel: 'Remover',
+                                          onConfirm: async () => {
+                                            await removerMembro(membro.id)
+                                          },
+                                        })
+                                      }}
+                                      aria-label="Remover da igreja"
+                                      title="Remover da igreja"
+                                      className="m-0 h-7"
+                                    >
+                                      <IonIcon slot="icon-only" icon={trashOutline} />
+                                    </IonButton>
+                                  )}
+                                </div>
+                              </div>
+                            </IonCardHeader>
+
+                            <IonCardContent className="pt-0">
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`text-[10px] px-2 py-0.5 rounded-full ${
+                                    membro.papel === 'admin'
+                                      ? 'bg-red-500/20 text-red-300'
+                                      : membro.papel === 'lider'
+                                        ? 'bg-amber-500/20 text-amber-300'
+                                        : 'bg-slate-500/20 text-slate-300'
+                                  }`}
+                                >
+                                  {membro.papel === 'admin' ? 'Admin' : membro.papel === 'lider' ? 'Líder' : 'Membro'}
+                                </span>
+                                {membro.funcoes && membro.funcoes.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {membro.funcoes.map((f) => (
+                                      <span
+                                        key={f}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/70 text-slate-200 text-[10px]"
+                                      >
+                                        {f === 'voz' ? '🎤' : f === 'musico' ? '🎸' : '•'}
+                                        <span>{f === 'voz' ? 'Voz' : f === 'musico' ? 'Músico' : f}</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </IonCardContent>
+                          </>
+                        )}
+                      </IonCard>
                     ))}
                   </div>
 
                   {totalPaginasMembro > 1 && (
-                    <div className="flex justify-center gap-2 mt-4">
-                      <button
+                    <div className="flex items-center justify-between gap-2 pt-2 mt-2">
+                      <IonButton
                         type="button"
-                        onClick={() => setPaginaMembro((p) => Math.max(1, p - 1))}
-                        disabled={paginaMembro === 1}
-                        className="px-2 py-1 rounded border border-slate-600 text-[10px] hover:bg-slate-800 disabled:opacity-40"
+                        fill="clear"
+                        size="small"
+                        onClick={() => setPaginaMembro(Math.max(1, paginaMembro - 1))}
+                        disabled={paginaMembro <= 1}
+                        aria-label="Página anterior"
+                        className="m-0 h-7"
                       >
-                        ← Anterior
-                      </button>
-                      <span className="px-2 py-1 text-[10px] text-slate-400">
-                        {paginaMembro} / {totalPaginasMembro}
-                      </span>
-                      <button
+                        <IonIcon slot="icon-only" icon={chevronBackOutline} />
+                      </IonButton>
+                      <p className="text-[11px] text-slate-400 self-center">
+                        Página {paginaMembro} de {totalPaginasMembro}
+                      </p>
+                      <IonButton
                         type="button"
-                        onClick={() => setPaginaMembro((p) => Math.min(totalPaginasMembro, p + 1))}
-                        disabled={paginaMembro === totalPaginasMembro}
-                        className="px-2 py-1 rounded border border-slate-600 text-[10px] hover:bg-slate-800 disabled:opacity-40"
+                        fill="clear"
+                        size="small"
+                        onClick={() => setPaginaMembro(Math.min(totalPaginasMembro, paginaMembro + 1))}
+                        disabled={paginaMembro >= totalPaginasMembro}
+                        aria-label="Próxima página"
+                        className="m-0 h-7"
                       >
-                        Próxima →
-                      </button>
+                        <IonIcon slot="icon-only" icon={chevronForwardOutline} />
+                      </IonButton>
                     </div>
                   )}
                 </>
@@ -458,294 +695,121 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
 
       <div className="border-t border-slate-800/70" />
 
-      <section className="rounded-2xl bg-slate-900/60 p-4 text-sm shadow-sm">
-        <h2 className="text-sm font-semibold mb-2 text-slate-100">Convidar novo membro</h2>
-        <p className="text-[11px] text-slate-400 mb-4">
-          Envie um convite por email. O membro receberá um link para criar a senha e ativar a conta.
-        </p>
-        <form onSubmit={handleInviteMembro} className="space-y-3">
-          <div>
-            <label className="block text-[11px] font-medium text-slate-300 mb-1" htmlFor="novoEmail">
-              Email do membro *
-            </label>
-            <input
-              id="novoEmail"
-              type="email"
-              value={novoMembroEmail}
-              onChange={(e) => setNovoMembroEmail(e.target.value)}
-              placeholder="exemplo@igreja.com"
-              className="w-full rounded-xl bg-slate-900/80 border border-slate-700/70 px-3 py-2.5 text-sm text-slate-50 placeholder:text-slate-500 outline-none focus:ring-1 focus:ring-emerald-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-slate-300 mb-1" htmlFor="novoNome">
-              Nome do membro (opcional)
-            </label>
-            <input
-              id="novoNome"
-              type="text"
-              value={novoMembroNome}
-              onChange={(e) => setNovoMembroNome(e.target.value)}
-              placeholder="Nome completo"
-              className="w-full rounded-xl bg-slate-900/80 border border-slate-700/70 px-3 py-2.5 text-sm text-slate-50 placeholder:text-slate-500 outline-none focus:ring-1 focus:ring-emerald-500"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-slate-300 mb-1" htmlFor="novoTelefone">
-              Telefone (opcional)
-            </label>
-            <input
-              id="novoTelefone"
-              type="tel"
-              value={novoMembroTelefone}
-              onChange={(e) => setNovoMembroTelefone(e.target.value)}
-              placeholder="(11) 99999-9999"
-              className="w-full rounded-xl bg-slate-900/80 border border-slate-700/70 px-3 py-2.5 text-sm text-slate-50 placeholder:text-slate-500 outline-none focus:ring-1 focus:ring-emerald-500"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-slate-300 mb-1" htmlFor="novoPapel">
-              Papel na equipe
-            </label>
-            <select
-              id="novoPapel"
-              value={novoMembroPapel}
-              onChange={(e) => setNovoMembroPapel(e.target.value as 'membro' | 'lider' | 'admin')}
-              className="w-full rounded-xl bg-slate-900/80 border border-slate-700/70 px-3 py-2.5 text-sm text-slate-50 outline-none focus:ring-1 focus:ring-emerald-500"
-            >
-              <option value="membro">Membro</option>
-              <option value="lider">Líder</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-          <div>
-            <p className="block text-[11px] font-medium text-slate-300 mb-1">Perfil (ministério)</p>
-            <div className="flex flex-wrap gap-4">
-              <label className="inline-flex items-center gap-2 text-[11px] text-slate-200 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={novoMembroFuncoes.includes('voz')}
-                  onChange={(e) => {
-                    const marcado = e.target.checked
-                    setNovoMembroFuncoes((prev) => {
-                      if (marcado) {
-                        return prev.includes('voz') ? prev : [...prev, 'voz']
-                      }
-                      return prev.filter((f) => f !== 'voz')
-                    })
-                  }}
-                  className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
-                />
-                <span>🎤 Voz</span>
-              </label>
+      <section className="rounded-2xl bg-slate-900/60 p-2 text-sm shadow-sm">
+        <IonAccordionGroup>
+          <IonAccordion value="invite">
+            <IonItem slot="header" lines="none">
+              <IonLabel>Convidar novo membro</IonLabel>
+            </IonItem>
+            <div slot="content" className="p-4">
+              <p className="text-[11px] text-slate-400 mb-4">
+                Envie um convite por email. O membro receberá um link para criar a senha e ativar a conta.
+              </p>
 
-              <label className="inline-flex items-center gap-2 text-[11px] text-slate-200 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={novoMembroFuncoes.includes('musico')}
-                  onChange={(e) => {
-                    const marcado = e.target.checked
-                    setNovoMembroFuncoes((prev) => {
-                      if (marcado) {
-                        return prev.includes('musico') ? prev : [...prev, 'musico']
-                      }
-                      return prev.filter((f) => f !== 'musico')
-                    })
-                  }}
-                  className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
-                />
-                <span>🎸 Músico</span>
-              </label>
-            </div>
-          </div>
-          <button
-            type="submit"
-            disabled={savingMembro}
-            className="w-full inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-50 hover:bg-slate-900 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {savingMembro ? 'Enviando convite...' : 'Enviar convite'}
-          </button>
-        </form>
-      </section>
+              <form onSubmit={handleInviteMembro} className="space-y-3">
+                <IonItem lines="none" className="rounded-xl">
+                  <IonLabel position="stacked" className="text-[11px] font-semibold" style={{ fontWeight: 700 }}>
+                    Email do membro *
+                  </IonLabel>
+                  <IonInput
+                    value={novoMembroEmail}
+                    type="email"
+                    inputMode="email"
+                    autocomplete="email"
+                    placeholder="exemplo@igreja.com"
+                    onIonChange={(e) => setNovoMembroEmail(String(e.detail.value ?? ''))}
+                    required
+                    style={{ fontSize: '10.5px' }}
+                  />
+                </IonItem>
 
-      {editandoMembroId && (() => {
-        const membro = editandoMembro ?? membros.find((m) => m.id === editandoMembroId)
-        if (!membro) return null
+                <IonItem lines="none" className="rounded-xl">
+                  <IonLabel position="stacked" className="text-[11px] font-semibold" style={{ fontWeight: 700 }}>
+                    Nome do membro
+                  </IonLabel>
+                  <IonInput
+                    value={novoMembroNome}
+                    type="text"
+                    placeholder="Nome completo"
+                    onIonChange={(e) => setNovoMembroNome(String(e.detail.value ?? ''))}
+                    style={{ fontSize: '10.5px' }}
+                    required
+                  />
+                </IonItem>
 
-        return createPortal(
-          <div
-            data-admin-modal="edit-membro"
-            className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-white px-4"
-            style={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 2147483647,
-              backgroundColor: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingLeft: '1rem',
-              paddingRight: '1rem',
-            }}
-          >
-            <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 text-xs shadow-xl">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-100">Editar membro</p>
-                  <p className="text-[11px] text-slate-400">
-                    {membro.nome || 'Sem nome'}
-                    {' · '}
-                    {membro.email}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={cancelarEdicaoMembro}
-                  className="text-slate-400 hover:text-slate-200 text-sm"
-                  aria-label="Fechar"
-                >
-                  ✕
-                </button>
-              </div>
+                <IonItem lines="none" className="rounded-xl">
+                  <IonLabel position="stacked" className="text-[11px] font-semibold" style={{ fontWeight: 700 }}>
+                    Telefone
+                  </IonLabel>
+                  <IonInput
+                    value={novoMembroTelefoneMasked}
+                    type="tel"
+                    inputMode="tel"
+                    autocomplete="tel"
+                    placeholder="(11) 99999-9999"
+                    onIonInput={(e) => {
+                      const raw = String(e.detail.value ?? '')
+                      const digitsOnly = raw.replace(/\D/g, '')
+                      const masked = maskPhoneBR(digitsOnly)
+                      setNovoMembroTelefoneMasked(masked)
+                      setNovoMembroTelefoneDigits(unmask(masked))
+                    }}
+                    style={{ fontSize: '10.5px' }}
+                  />
+                </IonItem>
 
-              <div className="grid grid-cols-1 gap-3 mb-4">
-                <div>
-                  <label className="block text-[10px] text-slate-400 mb-1" htmlFor="editarMembroPapel">Papel</label>
-                  <select
-                    id="editarMembroPapel"
-                    value={editandoMembroPapel}
-                    onChange={(e) => setEditandoMembroPapel(e.target.value as 'admin' | 'lider' | 'membro')}
-                    className="w-full rounded-xl border border-slate-700/70 bg-slate-900/80 px-3 py-2 text-xs text-slate-50 outline-none focus:ring-1 focus:ring-emerald-500"
-                  >
-                    <option value="membro">Membro</option>
-                    <option value="lider">Líder</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] text-slate-400 mb-1">Funções</label>
-                  <div className="flex flex-wrap gap-4">
-                    <label className="inline-flex items-center gap-2 text-[11px] text-slate-200 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={editandoMembroFuncoes.includes('voz')}
-                        onChange={(e) => {
-                          const marcado = e.target.checked
-                          setEditandoMembroFuncoes((prev) => {
-                            if (marcado) {
-                              return prev.includes('voz') ? prev : [...prev, 'voz']
-                            }
-                            return prev.filter((f) => f !== 'voz')
-                          })
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <IonItem lines="none" className="rounded-xl">
+                      <IonLabel position="stacked" className="text-[11px] font-semibold" style={{ fontWeight: 700 }}>
+                        Papel na equipe
+                      </IonLabel>
+                      <IonSelect
+                        interface="popover"
+                        value={novoMembroPapel}
+                        onIonChange={(e) => {
+                          setNovoMembroPapel(String(e.detail.value ?? 'membro') as 'membro' | 'lider' | 'admin')
                         }}
-                        className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
-                      />
-                      <span>🎤 Voz</span>
-                    </label>
+                        style={{ fontSize: '10.5px' }}
+                      >
+                        <IonSelectOption value="membro">Membro</IonSelectOption>
+                        <IonSelectOption value="lider">Líder</IonSelectOption>
+                        <IonSelectOption value="admin">Admin</IonSelectOption>
+                      </IonSelect>
+                    </IonItem>
+                  </div>
 
-                    <label className="inline-flex items-center gap-2 text-[11px] text-slate-200 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={editandoMembroFuncoes.includes('musico')}
-                        onChange={(e) => {
-                          const marcado = e.target.checked
-                          setEditandoMembroFuncoes((prev) => {
-                            if (marcado) {
-                              return prev.includes('musico') ? prev : [...prev, 'musico']
-                            }
-                            return prev.filter((f) => f !== 'musico')
-                          })
+                  <div>
+                    <IonItem lines="none" className="rounded-xl">
+                      <IonLabel position="stacked" className="text-[11px] font-semibold" style={{ fontWeight: 700 }}>
+                        Funções
+                      </IonLabel>
+                      <IonSelect
+                        multiple
+                        interface="alert"
+                        interfaceOptions={{
+                          header: 'Funções',
+                          subHeader: 'Selecione uma ou mais funções',
                         }}
-                        className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
-                      />
-                      <span>🎸 Músico</span>
-                    </label>
+                        value={novoMembroFuncoes}
+                        onIonChange={(e) => setNovoMembroFuncoes((e.detail.value as string[]) ?? [])}
+                        style={{ fontSize: '10.5px' }}
+                      >
+                        <IonSelectOption value="voz">Voz</IonSelectOption>
+                        <IonSelectOption value="musico">Músico</IonSelectOption>
+                      </IonSelect>
+                    </IonItem>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={cancelarEdicaoMembro}
-                  className="px-3 py-2 rounded-xl border border-slate-700/70 text-slate-200 hover:bg-slate-800"
-                  disabled={savingMembro}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!editandoMembroId) return
-                    try {
-                      setSavingMembro(true)
-                      setMembrosError(null)
-                      const funcoesToSave = editandoMembroFuncoes.length > 0
-                        ? Array.from(new Set(editandoMembroFuncoes)).sort()
-                        : null
-                      const { data, error } = await supabase
-                        .from('usuarios')
-                        .update({
-                          papel: editandoMembroPapel,
-                          funcoes: funcoesToSave,
-                        })
-                        .eq('id', editandoMembroId)
-                        .select('id, papel, funcoes')
-                        .maybeSingle()
-                      if (error) {
-                        setMembrosError(`Erro ao atualizar membro: ${error.message}`)
-                        return
-                      }
-
-                      if (!data) {
-                        setMembrosError('Sem permissão para atualizar este membro.')
-                        await carregarMembros()
-                        return
-                      }
-
-                      const responseRow: unknown = data
-                      const maybeFuncoes =
-                        responseRow && typeof responseRow === 'object' && 'funcoes' in responseRow
-                          ? (responseRow as { funcoes?: unknown }).funcoes
-                          : null
-                      const savedFuncoes = Array.isArray(maybeFuncoes)
-                        ? maybeFuncoes.map((f) => String(f)).sort()
-                        : null
-                      const expectedFuncoes = funcoesToSave
-
-                      const savedFuncoesKey = savedFuncoes ? savedFuncoes.join('|') : ''
-                      const expectedFuncoesKey = expectedFuncoes ? expectedFuncoes.join('|') : ''
-
-                      if (savedFuncoesKey !== expectedFuncoesKey) {
-                        setMembrosError(
-                          'Não foi possível salvar as funções selecionadas (o servidor retornou valores diferentes).',
-                        )
-                        await carregarMembros()
-                        return
-                      }
-
-                      cancelarEdicaoMembro()
-                      await carregarMembros()
-                    } catch (e) {
-                      console.error(e)
-                      setMembrosError('Erro ao atualizar membro.')
-                    } finally {
-                      setSavingMembro(false)
-                    }
-                  }}
-                  className="px-3 py-2 rounded-xl bg-emerald-500 text-[11px] font-semibold text-slate-900 hover:bg-emerald-400"
-                  disabled={savingMembro}
-                >
-                  {savingMembro ? 'Salvando...' : 'Salvar'}
-                </button>
-              </div>
+                <IonButton type="submit" expand="block" disabled={savingMembro}>
+                  {savingMembro ? 'Enviando convite...' : 'Enviar convite'}
+                </IonButton>
+              </form>
             </div>
-          </div>,
-          modalRoot ?? document.body,
-        )
-      })()}
+          </IonAccordion>
+        </IonAccordionGroup>
+      </section>
 
       <IonAlert
         isOpen={confirmDialogOpen}

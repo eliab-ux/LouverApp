@@ -49,8 +49,28 @@ serve(async (req) => {
     const igreja_id = body.igreja_id
 
     // SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são injetados automaticamente pelo Supabase
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
+    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+
+    if (!SUPABASE_URL) {
+      return new Response(JSON.stringify({ error: 'SUPABASE_URL não configurado nas variáveis de ambiente.' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (!SERVICE_ROLE_KEY) {
+      return new Response(
+        JSON.stringify({
+          error:
+            'SUPABASE_SERVICE_ROLE_KEY não configurado. Configure em Supabase > Project Settings > Functions > Secrets e faça redeploy da função.',
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
+      )
+    }
 
     const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
 
@@ -119,7 +139,10 @@ serve(async (req) => {
     if (inviteError || !userData?.user) {
       console.error('Erro inviteUserByEmail:', inviteError)
       return new Response(
-        JSON.stringify({ error: inviteError?.message || 'Erro ao convidar usuário.' }),
+        JSON.stringify({
+          error: inviteError?.message || 'Erro ao convidar usuário.',
+          details: (inviteError as unknown as { code?: string }).code ?? null,
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
@@ -140,16 +163,29 @@ serve(async (req) => {
     if (insertError) {
       // Se já existe, apenas atualiza
       if (insertError.code === '23505') {
-        await supabaseAdmin
+        const { error: updateError } = await supabaseAdmin
           .from('usuarios')
           .update({ papel, funcoes, telefone, nome: body.nome ?? null })
           .eq('email', body.email)
+
+        if (updateError) {
+          console.error('Erro ao atualizar usuario existente:', updateError)
+          return new Response(
+            JSON.stringify({
+              error: 'Erro ao atualizar usuário existente na tabela usuarios.',
+              details: updateError.message,
+              code: (updateError as unknown as { code?: string }).code ?? null,
+            }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          )
+        }
       } else {
         console.error('Erro ao inserir em usuarios:', insertError)
         return new Response(
           JSON.stringify({
             warning: 'Convite enviado, mas houve erro ao criar registro em usuarios.',
             details: insertError.message,
+            code: (insertError as unknown as { code?: string }).code ?? null,
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         )
@@ -162,9 +198,15 @@ serve(async (req) => {
     })
   } catch (e) {
     console.error('invite_user_admin error:', e)
-    return new Response(JSON.stringify({ error: 'Erro interno.' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return new Response(
+      JSON.stringify({
+        error: 'Erro interno.',
+        details: e instanceof Error ? e.message : String(e),
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
+    )
   }
 })

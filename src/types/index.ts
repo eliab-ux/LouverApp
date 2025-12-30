@@ -8,9 +8,11 @@ export type AppUser = {
   id: string
   email: string
   nome: string | null
+  telefone?: string | null
   papel: 'admin' | 'lider' | 'membro'
   igrejaId: string
   igrejaNome: string | null
+  igrejaCnpj?: string | null
   funcoes?: string[] | null
 }
 

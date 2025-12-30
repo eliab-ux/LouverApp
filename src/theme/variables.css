@@ -1,0 +1,21 @@
+:root {
+  --ion-background-color: #F8FAFC;
+  --ion-text-color: #0F172A;
+
+  --ion-color-primary: #2563EB;
+  --ion-color-primary-contrast: #ffffff;
+
+  --ion-color-step-50: #f8fafc;
+  --ion-color-step-100: #f1f5f9;
+}
+
+body.dark {
+  --ion-background-color: #0B1220;
+  --ion-text-color: #E5E7EB;
+
+  --ion-color-primary: #38BDF8;
+  --ion-color-primary-contrast: #0B1220;
+
+  --ion-color-step-50: #111B2E;
+  --ion-color-step-100: #16233B;
+}

@@ -1,6 +1,22 @@
-import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from 'react'
-import { IonAlert, IonButton, IonIcon } from '@ionic/react'
-import { createOutline, trashOutline } from 'ionicons/icons'
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent } from 'react'
+import {
+  IonAccordion,
+  IonAccordionGroup,
+  IonAlert,
+  IonButton,
+  IonIcon,
+  IonInput,
+  IonItem,
+  IonLabel,
+} from '@ionic/react'
+import {
+  checkmarkOutline,
+  chevronBackOutline,
+  chevronForwardOutline,
+  closeOutline,
+  createOutline,
+  trashOutline,
+} from 'ionicons/icons'
 import { supabase } from '../../lib/supabase'
 import type { AppUser, MomentoCulto } from '../../types'
 
@@ -18,6 +34,11 @@ export function MomentosPanel({ user, momentos, onMomentosChange }: MomentosPane
   const [momentoEditandoNome, setMomentoEditandoNome] = useState('')
   const itensPorPagina = 7
   const [paginaMomento, setPaginaMomento] = useState(1)
+
+  const addButtonPaddingStyle: CSSProperties & Record<string, string> = {
+    ['--padding-start']: '14px',
+    ['--padding-end']: '14px',
+  }
 
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [confirmDialogTitle, setConfirmDialogTitle] = useState('')
@@ -197,26 +218,33 @@ export function MomentosPanel({ user, momentos, onMomentosChange }: MomentosPane
                     >
                       {emEdicao ? (
                         <form onSubmit={salvarEdicaoMomento} className="flex-1 flex items-center gap-2">
-                          <input
-                            type="text"
+                          <IonInput
                             value={momentoEditandoNome}
-                            onChange={(e) => setMomentoEditandoNome(e.target.value)}
-                            className="flex-1 rounded-xl border border-slate-700/70 bg-slate-900/80 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 outline-none focus:ring-1 focus:ring-emerald-500"
+                            onIonInput={(e) => setMomentoEditandoNome(String(e.detail.value ?? ''))}
+                            className="flex-1"
+                            style={{ fontSize: '10.5px' }}
                           />
-                          <button
-                            type="submit"
-                            disabled={savingMomento}
-                            className="px-3 py-2 rounded-xl bg-emerald-500 text-[11px] font-semibold text-slate-900 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
-                          >
-                            Salvar
-                          </button>
-                          <button
+                          <IonButton
                             type="button"
+                            fill="clear"
+                            size="small"
                             onClick={cancelarEdicaoMomento}
-                            className="px-3 py-2 rounded-xl border border-slate-700/70 text-[11px] text-slate-200 hover:bg-slate-800"
+                            disabled={savingMomento}
+                            aria-label="Cancelar edição"
+                            className="m-0 h-7"
                           >
-                            Cancelar
-                          </button>
+                            <IonIcon slot="icon-only" icon={closeOutline} />
+                          </IonButton>
+                          <IonButton
+                            type="submit"
+                            fill="clear"
+                            size="small"
+                            disabled={savingMomento}
+                            aria-label="Salvar edição"
+                            className="m-0 h-7"
+                          >
+                            <IonIcon slot="icon-only" icon={checkmarkOutline} />
+                          </IonButton>
                         </form>
                       ) : (
                         <span className="flex-1 truncate text-[15px] font-medium text-slate-100">{m.nome}</span>
@@ -284,30 +312,36 @@ export function MomentosPanel({ user, momentos, onMomentosChange }: MomentosPane
                 })}
             </ul>
             {Math.ceil(momentos.length / itensPorPagina) > 1 && (
-              <div className="flex justify-center gap-2 mt-3">
-                <button
+              <div className="flex items-center justify-between gap-2 pt-2">
+                <IonButton
                   type="button"
-                  onClick={() => setPaginaMomento((p) => Math.max(1, p - 1))}
-                  disabled={paginaMomento === 1}
-                  className="px-2 py-1 rounded border border-slate-600 text-[10px] hover:bg-slate-800 disabled:opacity-40"
+                  fill="clear"
+                  size="small"
+                  onClick={() => setPaginaMomento(Math.max(1, paginaMomento - 1))}
+                  disabled={paginaMomento <= 1}
+                  aria-label="Página anterior"
+                  className="m-0 h-7"
                 >
-                  ← Anterior
-                </button>
-                <span className="px-2 py-1 text-[10px] text-slate-400">
-                  {paginaMomento} / {Math.ceil(momentos.length / itensPorPagina)}
-                </span>
-                <button
+                  <IonIcon slot="icon-only" icon={chevronBackOutline} />
+                </IonButton>
+                <p className="text-[11px] text-slate-400">
+                  Página {paginaMomento} de {Math.ceil(momentos.length / itensPorPagina)}
+                </p>
+                <IonButton
                   type="button"
+                  fill="clear"
+                  size="small"
                   onClick={() =>
-                    setPaginaMomento((p) =>
-                      Math.min(Math.ceil(momentos.length / itensPorPagina), p + 1),
+                    setPaginaMomento(
+                      Math.min(Math.ceil(momentos.length / itensPorPagina), paginaMomento + 1),
                     )
                   }
                   disabled={paginaMomento >= Math.ceil(momentos.length / itensPorPagina)}
-                  className="px-2 py-1 rounded border border-slate-600 text-[10px] hover:bg-slate-800 disabled:opacity-40"
+                  aria-label="Próxima página"
+                  className="m-0 h-7"
                 >
-                  Próxima →
-                </button>
+                  <IonIcon slot="icon-only" icon={chevronForwardOutline} />
+                </IonButton>
               </div>
             )}
           </>
@@ -316,30 +350,39 @@ export function MomentosPanel({ user, momentos, onMomentosChange }: MomentosPane
 
       <div className="border-t border-slate-800/70" />
 
-      <section className="rounded-2xl bg-slate-900/60 p-4 shadow-sm">
-        <h2 className="text-sm font-semibold mb-3 text-slate-100">Novo momento de culto</h2>
-        <form onSubmit={handleCreateMomento} className="space-y-3">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-300" htmlFor="novoMomento">
-              Nome do momento
-            </label>
-            <input
-              id="novoMomento"
-              type="text"
-              value={novoMomento}
-              onChange={(e) => setNovoMomento(e.target.value)}
-              placeholder="Ex: Abertura, Palavra, Oferta"
-              className="w-full rounded-xl bg-slate-900/80 border border-slate-700/70 px-3 py-2.5 text-sm text-slate-50 placeholder:text-slate-500 outline-none focus:ring-1 focus:ring-emerald-500"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={savingMomento}
-            className="w-full inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-50 hover:bg-slate-900 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {savingMomento ? 'Salvando...' : 'Adicionar momento'}
-          </button>
-        </form>
+      <section className="rounded-2xl bg-slate-900/60 p-2 shadow-sm">
+        <IonAccordionGroup>
+          <IonAccordion value="novo">
+            <IonItem slot="header" lines="none">
+              <IonLabel>Novo momento de culto</IonLabel>
+            </IonItem>
+            <div slot="content" className="p-4">
+              <form onSubmit={handleCreateMomento} className="space-y-3">
+                <IonItem lines="none" className="rounded-xl">
+                  <IonLabel position="stacked" className="text-[11px] font-semibold" style={{ fontWeight: 700 }}>
+                    Nome do momento
+                  </IonLabel>
+                  <IonInput
+                    value={novoMomento}
+                    onIonInput={(e) => setNovoMomento(String(e.detail.value ?? ''))}
+                    placeholder="Ex: Abertura, Palavra, Oferta"
+                    style={{ fontSize: '10.5px' }}
+                  />
+                </IonItem>
+
+                <IonButton
+                  type="submit"
+                  expand="block"
+                  disabled={savingMomento}
+                  size="small"
+                  style={addButtonPaddingStyle}
+                >
+                  {savingMomento ? 'Salvando...' : 'Adicionar momento'}
+                </IonButton>
+              </form>
+            </div>
+          </IonAccordion>
+        </IonAccordionGroup>
       </section>
 
       <IonAlert
