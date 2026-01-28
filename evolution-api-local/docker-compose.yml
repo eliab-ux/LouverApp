@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: evolution-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: evolution123
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - evolution-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: evolution-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - evolution-network
+
+  # Evolution API
+  evolution-api:
+    image: atendai/evolution-api:latest
+    container_name: evolution-api
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    environment:
+      # Server
+      SERVER_URL: https://sweet-jars-spend.loca.lt
+
+      # Database
+      DATABASE_ENABLED: true
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:evolution123@postgres:5432/evolution
+      DATABASE_CONNECTION_CLIENT_NAME: evolution_client
+
+      # Redis (disabled for simplicity in dev)
+      REDIS_ENABLED: false
+      # REDIS_URI: redis://redis:6379
+      # REDIS_PREFIX_KEY: evolution
+
+      # Authentication
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: kwXt0yuVq871cPUHEZR5FeOsLYi3WBjo
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: true
+
+      # QR Code
+      QRCODE_LIMIT: 30
+      QRCODE_COLOR: "#198754"
+
+      # Logs
+      LOG_LEVEL: ERROR,WARN,DEBUG,INFO,LOG,VERBOSE,DARK,WEBHOOKS
+      LOG_COLOR: true
+      LOG_BAILEYS: false
+
+      # Webhook
+      WEBHOOK_GLOBAL_ENABLED: false
+
+      # RabbitMQ (desabilitado para dev local)
+      RABBITMQ_ENABLED: false
+
+      # SQS (desabilitado para dev local)
+      SQS_ENABLED: false
+
+      # Websocket
+      WEBSOCKET_ENABLED: false
+
+      # Instance
+      DEL_INSTANCE: false
+      DEL_TEMP_INSTANCES: true
+
+      # Storage
+      STORAGE_TYPE: local
+      STORAGE_LOCAL_PATH: /evolution/instances
+
+    volumes:
+      - evolution_data:/evolution/instances
+    networks:
+      - evolution-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  evolution_data:
+
+networks:
+  evolution-network:
+    driver: bridge
+

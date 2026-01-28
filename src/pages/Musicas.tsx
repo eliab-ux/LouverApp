@@ -20,6 +20,7 @@ import {
   IonToggle,
   IonAccordion,
   IonAccordionGroup,
+  useIonRouter,
 } from '@ionic/react'
 import {
   createOutline,
@@ -35,6 +36,12 @@ import {
 } from 'ionicons/icons'
 import { supabase } from '../lib/supabase'
 import type { AppUser, Musica, Categoria, MomentoCulto, Estilo } from '../types'
+import {
+  LABEL_CLASSES,
+  INPUT_STYLES,
+  BUTTON_STYLES,
+  ACCORDION_CLASSES,
+} from '../styles/form-styles'
 
 interface MusicasProps {
   user: AppUser
@@ -49,6 +56,7 @@ export function Musicas({
   momentos,
   estilos,
 }: MusicasProps) {
+  const router = useIonRouter()
   // Estados de músicas
   const [musicas, setMusicas] = useState<Musica[]>([])
   const [novaMusicaNome, setNovaMusicaNome] = useState('')
@@ -108,11 +116,6 @@ export function Musicas({
     ['--color']: '#000000',
   }
 
-  const addButtonPaddingStyle: CSSProperties & Record<string, string> = {
-    ['--padding-start']: '14px',
-    ['--padding-end']: '14px',
-  }
-  
   // Estados de edição
   const [musicaEditandoId, setMusicaEditandoId] = useState<string | null>(null)
   const [musicaEditandoNome, setMusicaEditandoNome] = useState('')
@@ -151,7 +154,7 @@ export function Musicas({
         .order('nome', { ascending: true })
 
       if (error) {
-        setMusicaError(error.message)
+        tratarErroMusica(error.message)
         return
       }
 
@@ -176,6 +179,19 @@ export function Musicas({
     setConfirmDialogMessage(opts.message)
     setConfirmDialogOnConfirm(() => opts.onConfirm)
     setConfirmDialogOpen(true)
+  }
+
+  const tratarErroMusica = (message: string) => {
+    if (message.includes('LIMIT_REACHED_MUSICAS')) {
+      setMusicaError('Limite de músicas do plano Free atingido. Assine o Pro para liberar mais músicas.')
+      window.setTimeout(() => router.push('/app/assinatura', 'forward', 'push'), 600)
+      return
+    }
+    if (message.includes('IGREJA_SUSPENSA')) {
+      setMusicaError('Igreja suspensa. Cadastro de músicas bloqueado.')
+      return
+    }
+    setMusicaError(message)
   }
 
   // CRUD de músicas
@@ -203,7 +219,7 @@ export function Musicas({
       })
 
       if (error) {
-        setMusicaError(error.message)
+        tratarErroMusica(error.message)
         return
       }
 
@@ -274,7 +290,7 @@ export function Musicas({
         .eq('id', musicaEditandoId)
 
       if (error) {
-        setMusicaError(error.message)
+        tratarErroMusica(error.message)
         return
       }
 
@@ -821,7 +837,7 @@ export function Musicas({
             <IonItem slot="header" lines="none" className="ion-no-padding">
               <IonIcon slot="start" icon={musicalNotesOutline} />
               <IonLabel>
-                <h2 className="text-sm font-semibold text-gray-800">Nova música</h2>
+                <h2 className={ACCORDION_CLASSES.header}>Nova música</h2>
               </IonLabel>
             </IonItem>
 
@@ -832,13 +848,13 @@ export function Musicas({
                     value={novaMusicaNome}
                     onIonInput={(e) => setNovaMusicaNome(String(e.detail.value ?? ''))}
                     placeholder="Ex: Grande é o Senhor"
-                    style={{ fontSize: '10.5px' }}
+                    style={INPUT_STYLES.default}
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[11px] mb-1 font-semibold" style={{ fontWeight: 700 }}>
+                    <label className={LABEL_CLASSES.field + ' block mb-1'}>
                       BPM
                     </label>
                     <IonInput
@@ -846,11 +862,11 @@ export function Musicas({
                       value={novaMusicaBpm}
                       onIonInput={(e) => setNovaMusicaBpm(String(e.detail.value ?? ''))}
                       placeholder="Ex: 138"
-                      style={{ fontSize: '10.5px' }}
+                      style={INPUT_STYLES.default}
                     />
                   </div>
                   <div>
-                    <span className="block text-[11px] mb-1 font-semibold" style={{ fontWeight: 700 }}>
+                    <span className={LABEL_CLASSES.field + ' block mb-1'}>
                       Tons
                     </span>
                     <IonSelect
@@ -863,7 +879,7 @@ export function Musicas({
                       }}
                       value={novaMusicaTons}
                       onIonChange={(e) => setNovaMusicaTons((e.detail.value as string[]) ?? [])}
-                      style={{ fontSize: '10.5px' }}
+                      style={INPUT_STYLES.default}
                     >
                       {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map((tom) => (
                         <IonSelectOption key={tom} value={tom}>
@@ -876,7 +892,7 @@ export function Musicas({
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[11px] mb-1 font-semibold" style={{ fontWeight: 700 }}>
+                    <label className={LABEL_CLASSES.field + ' block mb-1'}>
                       Categoria
                     </label>
                     <IonSelect
@@ -885,7 +901,7 @@ export function Musicas({
                       placeholder="Selecione"
                       onIonChange={(e) => setNovaMusicaCategoriaId(String(e.detail.value ?? ''))}
                       interfaceOptions={{ cssClass: 'musicas-select-popover-small' }}
-                      style={{ fontSize: '10.5px' }}
+                      style={INPUT_STYLES.default}
                     >
                       <IonSelectOption value="">Selecione</IonSelectOption>
                       {categorias.map((cat) => (
@@ -896,7 +912,7 @@ export function Musicas({
                     </IonSelect>
                   </div>
                   <div>
-                    <label className="block text-[11px] mb-1 font-semibold" style={{ fontWeight: 700 }}>
+                    <label className={LABEL_CLASSES.field + ' block mb-1'}>
                       Momento
                     </label>
                     <IonSelect
@@ -905,7 +921,7 @@ export function Musicas({
                       placeholder="Selecione"
                       onIonChange={(e) => setNovaMusicaMomentoId(String(e.detail.value ?? ''))}
                       interfaceOptions={{ cssClass: 'musicas-select-popover-small' }}
-                      style={{ fontSize: '10.5px' }}
+                      style={INPUT_STYLES.default}
                     >
                       <IonSelectOption value="">Selecione</IonSelectOption>
                       {momentos.map((mom) => (
@@ -919,7 +935,7 @@ export function Musicas({
 
                 <div className="grid grid-cols-2 gap-2 items-end">
                   <div>
-                    <label className="block text-[11px] mb-1 font-semibold" style={{ fontWeight: 700 }}>
+                    <label className={LABEL_CLASSES.field + ' block mb-1'}>
                       Estilo
                     </label>
                     <IonSelect
@@ -928,7 +944,7 @@ export function Musicas({
                       placeholder="Selecione"
                       onIonChange={(e) => setNovaMusicaEstiloId(String(e.detail.value ?? ''))}
                       interfaceOptions={{ cssClass: 'musicas-select-popover-small' }}
-                      style={{ fontSize: '10.5px' }}
+                      style={INPUT_STYLES.default}
                     >
                       <IonSelectOption value="">Selecione</IonSelectOption>
                       {estilos.map((est) => (
@@ -940,7 +956,7 @@ export function Musicas({
                   </div>
 
                   <div className="flex items-center justify-between gap-2 rounded-md bg-slate-900 px-2 py-1">
-                    <span className="text-[11px] text-slate-200 font-semibold" style={{ fontWeight: 700 }}>
+                    <span className={LABEL_CLASSES.field + ' text-slate-200'}>
                       Possui VS
                     </span>
                     <IonToggle
@@ -954,7 +970,7 @@ export function Musicas({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] mb-1 font-semibold" style={{ fontWeight: 700 }}>
+                  <label className={LABEL_CLASSES.field + ' block mb-1'}>
                     Link da música
                   </label>
                   <IonInput
@@ -962,7 +978,7 @@ export function Musicas({
                     value={novaMusicaLink}
                     onIonInput={(e) => setNovaMusicaLink(String(e.detail.value ?? ''))}
                     placeholder="https://www.youtube.com/..."
-                    style={{ fontSize: '10.5px' }}
+                    style={INPUT_STYLES.default}
                   />
                 </div>
 
@@ -972,7 +988,7 @@ export function Musicas({
                     expand="block"
                     disabled={savingMusica}
                     size="small"
-                    style={addButtonPaddingStyle}
+                    style={BUTTON_STYLES.primary}
                   >
                     {savingMusica ? 'Salvando...' : 'Adicionar música'}
                   </IonButton>

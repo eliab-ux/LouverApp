@@ -38,14 +38,31 @@ CREATE TABLE IF NOT EXISTS template_momentos (
   created_at timestamptz DEFAULT now()
 );
 
+-- Adicionar constraints UNIQUE para permitir ON CONFLICT
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'template_categorias_nome_key') THEN
+    ALTER TABLE template_categorias ADD CONSTRAINT template_categorias_nome_key UNIQUE (nome);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'template_estilos_nome_key') THEN
+    ALTER TABLE template_estilos ADD CONSTRAINT template_estilos_nome_key UNIQUE (nome);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'template_momentos_nome_key') THEN
+    ALTER TABLE template_momentos ADD CONSTRAINT template_momentos_nome_key UNIQUE (nome);
+  END IF;
+END $$;
+
 -- =====================================================
 -- POPULAR TEMPLATES
 -- =====================================================
 
 -- Limpa dados existentes (para re-execução segura)
-TRUNCATE template_categorias, template_estilos, template_momentos;
+-- DESABILITADO: Não fazer TRUNCATE pois pode ter dados em uso
+-- TRUNCATE template_categorias, template_estilos, template_momentos;
 
--- CATEGORIAS
+-- CATEGORIAS (com ON CONFLICT para evitar duplicatas)
 INSERT INTO template_categorias (nome) VALUES
   ('Quebrantamento/Misericórdia'),
   ('Soberania e justiça de Deus'),
@@ -104,7 +121,8 @@ INSERT INTO template_categorias (nome) VALUES
   ('Santidade e Glória de Deus'),
   ('Presença e Soberania de Deus'),
   ('Quebrantamento/Santidade'),
-  ('Soberania de Deus/Quebrantamento');
+  ('Soberania de Deus/Quebrantamento')
+ON CONFLICT (nome) DO NOTHING;
 
 -- ESTILOS
 INSERT INTO template_estilos (nome) VALUES
@@ -114,7 +132,8 @@ INSERT INTO template_estilos (nome) VALUES
   ('Proclamação'),
   ('Intercessão'),
   ('Gratidão'),
-  ('Rendição');
+  ('Rendição')
+ON CONFLICT (nome) DO NOTHING;
 
 -- MOMENTOS
 INSERT INTO template_momentos (nome) VALUES
@@ -125,7 +144,8 @@ INSERT INTO template_momentos (nome) VALUES
   ('Abertura'),
   ('Medley'),
   ('Pós-Palavra'),
-  ('Ceia ou Pós-Palavra');
+  ('Ceia ou Pós-Palavra')
+ON CONFLICT (nome) DO NOTHING;
 
 -- =====================================================
 -- FUNÇÃO: Copiar templates para nova igreja

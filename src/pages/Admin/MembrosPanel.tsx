@@ -14,11 +14,17 @@ import {
   IonLabel,
   IonSelect,
   IonSelectOption,
+  useIonRouter,
 } from '@ionic/react'
-import { checkmarkOutline, chevronBackOutline, chevronForwardOutline, closeOutline, createOutline, trashOutline } from 'ionicons/icons'
+import { checkmarkOutline, chevronBackOutline, chevronForwardOutline, closeOutline, createOutline, paperPlaneOutline, trashOutline } from 'ionicons/icons'
 import { supabase } from '../../lib/supabase'
 import type { AppUser } from '../../types'
 import { maskPhoneBR, unmask } from '../../utils/phoneMask'
+import {
+  LABEL_CLASSES,
+  INPUT_STYLES,
+  TEXT_CLASSES,
+} from '../../styles/form-styles'
 
 export type Membro = {
   id: string
@@ -27,6 +33,9 @@ export type Membro = {
   telefone: string | null
   papel: 'admin' | 'lider' | 'membro'
   funcoes?: string[] | null
+  last_sign_in_at?: string | null
+  confirmed_at?: string | null
+  status?: 'aguardando_verificacao' | 'ativo' | 'inativo' | null
 }
 
 interface MembrosPanelProps {
@@ -34,6 +43,7 @@ interface MembrosPanelProps {
 }
 
 export function MembrosPanel({ user }: MembrosPanelProps) {
+  const router = useIonRouter()
   const [membros, setMembros] = useState<Membro[]>([])
   const [membrosLoading, setMembrosLoading] = useState(false)
   const [membrosError, setMembrosError] = useState<string | null>(null)
@@ -112,33 +122,93 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
     setConfirmDialogOpen(true)
   }
 
+  const extrairErroDaFuncao = async (err: unknown) => {
+    if (!err || typeof err !== 'object') return null
+    const maybeContext = (err as { context?: Response }).context
+    if (maybeContext && typeof maybeContext.json === 'function') {
+      const payload = await maybeContext.json().catch(() => null)
+      if (payload && typeof payload === 'object') {
+        const maybeMessage = [
+          (payload as { error?: unknown }).error,
+          (payload as { details?: unknown }).details,
+          (payload as { message?: unknown }).message,
+        ].find((value) => typeof value === 'string' && value.trim())
+        if (typeof maybeMessage === 'string') {
+          return maybeMessage
+        }
+      }
+    }
+    if ('message' in err && typeof (err as { message?: unknown }).message === 'string') {
+      return (err as { message?: string }).message ?? null
+    }
+    return null
+  }
+
+  const tratarErroMembro = (message: string, fallback?: string) => {
+    if (message.includes('LIMIT_REACHED_USUARIOS')) {
+      setMembrosError('Limite de usuarios do plano Free atingido. Assine o Pro para liberar mais membros.')
+      window.setTimeout(() => router.push('/app/assinatura', 'forward', 'push'), 600)
+      return
+    }
+    if (message.includes('IGREJA_SUSPENSA')) {
+      setMembrosError('Igreja suspensa. Cadastro de membros bloqueado.')
+      return
+    }
+    setMembrosError(fallback ?? message)
+  }
+
   const carregarMembros = useCallback(async () => {
     if (user.papel !== 'admin') return
 
     try {
       setMembrosLoading(true)
       setMembrosError(null)
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select('id, nome, email, telefone, papel, funcoes')
-        .eq('igreja_id', user.igrejaId)
-        .order('nome', { ascending: true })
+      const { data, error } = await supabase.functions.invoke('list_membros_admin', {
+        body: { igreja_id: user.igrejaId },
+      })
 
       if (error) {
-        console.error('Erro ao carregar membros:', error)
-        setMembrosError('Erro ao carregar membros da igreja.')
+        console.error('Erro ao carregar membros via Edge Function:', error)
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('usuarios')
+          .select('id, nome, email, telefone, papel, funcoes, status')
+          .eq('igreja_id', user.igrejaId)
+          .order('nome', { ascending: true })
+
+        if (fallbackError) {
+          console.error('Erro ao carregar membros:', fallbackError)
+          setMembrosError('Erro ao carregar membros da igreja.')
+          return
+        }
+
+        setMembros(
+          (fallbackData ?? []).map((m) => ({
+            id: String(m.id),
+            nome: m.nome ?? null,
+            email: m.email || `ID: ${String(m.id).substring(0, 8)}...`,
+            telefone: m.telefone ?? null,
+            papel: m.papel as 'admin' | 'lider' | 'membro',
+            funcoes: Array.isArray(m.funcoes) ? m.funcoes.map((f) => String(f)) : null,
+            status: (m as { status?: Membro['status'] }).status ?? null,
+          })),
+        )
         return
       }
 
-      // Mapeia os dados, usando id como email placeholder se não houver email
+      const response = data as { membros?: Array<Record<string, unknown>> } | null
+      const membrosApi = Array.isArray(response?.membros) ? response?.membros : []
+
       setMembros(
-        (data ?? []).map((m) => ({
-          id: String(m.id),
-          nome: m.nome ?? null,
-          email: m.email || `ID: ${String(m.id).substring(0, 8)}...`,
-          telefone: m.telefone ?? null,
+        membrosApi.map((m) => ({
+          id: String(m.id ?? ''),
+          nome: (m.nome as string | null) ?? null,
+          email: (m.email as string | null) || `ID: ${String(m.id ?? '').substring(0, 8)}...`,
+          telefone: (m.telefone as string | null) ?? null,
           papel: m.papel as 'admin' | 'lider' | 'membro',
           funcoes: Array.isArray(m.funcoes) ? m.funcoes.map((f) => String(f)) : null,
+          last_sign_in_at: (m.last_sign_in_at as string | null) ?? null,
+          confirmed_at: (m.confirmed_at as string | null) ?? null,
+          status: (m.status as Membro['status']) ?? null,
         })),
       )
     } catch (e) {
@@ -183,15 +253,23 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
 
       if (error) {
         console.error('Erro na função invite_user_admin:', error)
-        setMembrosError('Erro ao enviar convite. Verifique a configuração da Edge Function.')
+        const errorMessage = await extrairErroDaFuncao(error)
+        if (errorMessage) {
+          tratarErroMembro(errorMessage, 'Erro ao enviar convite. Verifique a configuracao da Edge Function.')
+          return
+        }
+        setMembrosError('Erro ao enviar convite. Verifique a configuracao da Edge Function.')
         return
       }
 
       const responseData: unknown = data
-      if (responseData && typeof responseData === 'object' && 'error' in responseData) {
-        const maybeError = (responseData as { error?: unknown }).error
-        if (typeof maybeError === 'string' && maybeError.trim()) {
-          setMembrosError(maybeError)
+      if (responseData && typeof responseData === 'object') {
+        const response = responseData as { error?: unknown; warning?: unknown; details?: unknown }
+        const maybeError = [response.error, response.details, response.warning].find(
+          (value) => typeof value === 'string' && value.trim(),
+        )
+        if (typeof maybeError === 'string') {
+          tratarErroMembro(maybeError)
           return
         }
       }
@@ -264,7 +342,7 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
         .maybeSingle()
 
       if (error) {
-        setMembrosError(`Erro ao atualizar membro: ${error.message}`)
+        tratarErroMembro(error.message, `Erro ao atualizar membro: ${error.message}`)
         return
       }
 
@@ -278,7 +356,58 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
       await carregarMembros()
     } catch (e) {
       console.error(e)
-      setMembrosError('Erro ao atualizar membro.')
+      tratarErroMembro('Erro ao atualizar membro.')
+    } finally {
+      setSavingMembro(false)
+    }
+  }
+
+  const reenviarConviteWhatsApp = async (membro: Membro) => {
+    if (!membro.telefone) {
+      setMembrosError('Telefone nao informado para reenviar convite.')
+      return
+    }
+
+    try {
+      setSavingMembro(true)
+      setMembrosError(null)
+
+      const { data, error } = await supabase.functions.invoke('invite_user_admin', {
+        body: {
+          email: membro.email,
+          nome: membro.nome,
+          papel: membro.papel,
+          funcoes: membro.funcoes ?? [],
+          telefone: membro.telefone,
+          igreja_id: user.igrejaId,
+        },
+      })
+
+      if (error) {
+        console.error('Erro ao reenviar convite:', error)
+        const errorMessage = await extrairErroDaFuncao(error)
+        if (errorMessage) {
+          tratarErroMembro(errorMessage, 'Erro ao reenviar convite por WhatsApp.')
+          return
+        }
+        setMembrosError('Erro ao reenviar convite por WhatsApp.')
+        return
+      }
+
+      const responseData: unknown = data
+      if (responseData && typeof responseData === 'object') {
+        const response = responseData as { error?: unknown; warning?: unknown; details?: unknown }
+        const maybeError = [response.error, response.details, response.warning].find(
+          (value) => typeof value === 'string' && value.trim(),
+        )
+        if (typeof maybeError === 'string') {
+          tratarErroMembro(maybeError)
+          return
+        }
+      }
+    } catch (e) {
+      console.error(e)
+      setMembrosError('Erro ao reenviar convite por WhatsApp.')
     } finally {
       setSavingMembro(false)
     }
@@ -339,7 +468,7 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
       if (error) {
         console.error('❌ ERRO COMPLETO:', JSON.stringify(error, null, 2))
         console.groupEnd()
-        setMembrosError(`Erro ao remover membro: ${error.message}`)
+        tratarErroMembro(error.message, `Erro ao remover membro: ${error.message}`)
         return
       }
 
@@ -348,7 +477,8 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
         if (data.success === false) {
           console.error('❌ RPC retornou erro:', data)
           console.groupEnd()
-          setMembrosError(`Erro: ${(data as { error?: string }).error || 'Erro desconhecido'}`)
+          const apiError = (data as { error?: string }).error || 'Erro desconhecido'
+          tratarErroMembro(apiError, `Erro: ${apiError}`)
           return
         }
         console.log('✅ Resultado da RPC:', data)
@@ -380,12 +510,12 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
       <section className="rounded-2xl bg-slate-900/60 p-4 shadow-sm">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div>
-            <h2 className="text-sm font-semibold text-slate-100">Membros</h2>
-            <p className="text-[11px] text-slate-400">Gerencie os membros e seus perfis</p>
+            <h2 className={LABEL_CLASSES.section}>Membros</h2>
+            <p className={`${LABEL_CLASSES.field} text-slate-400`}>Gerencie os membros e seus perfis</p>
           </div>
           <div className="flex items-center gap-2">
             <IonItem lines="none" className="rounded-xl" style={{ '--background': 'transparent' } as unknown as Record<string, string>}>
-              <IonLabel className="text-[10px] text-slate-400">Filtrar</IonLabel>
+              <IonLabel className={LABEL_CLASSES.small}>Filtrar</IonLabel>
               <IonSelect
                 interface="popover"
                 value={filtroPapel}
@@ -426,7 +556,7 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
 
               return (
                 <>
-                  <p className="text-[10px] text-slate-400 mb-2">
+                  <p className={`${LABEL_CLASSES.small} mb-2`}>
                     {filtroPapel === 'todos'
                       ? `${membros.length} membro(s) cadastrado(s)`
                       : `${membros.filter((m) => m.papel === filtroPapel).length} de ${membros.length} membro(s)`}
@@ -449,24 +579,24 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                                   value={editandoMembroNome}
                                   onIonInput={(e) => setEditandoMembroNome(String(e.detail.value ?? ''))}
                                   placeholder="Nome"
-                                  style={{ fontSize: '10.5px' }}
+                                  style={INPUT_STYLES.default}
                                 />
                               </div>
 
                               <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                  <span className="block text-[11px] mb-1 font-semibold" style={{ fontWeight: 700 }}>Email</span>
+                                  <span className={`${LABEL_CLASSES.field} block mb-1`}>Email</span>
                                   <IonInput
                                     value={editandoMembroEmail}
                                     type="email"
                                     inputMode="email"
                                     autocomplete="email"
                                     onIonInput={(e) => setEditandoMembroEmail(String(e.detail.value ?? ''))}
-                                    style={{ fontSize: '10.5px' }}
+                                    style={INPUT_STYLES.default}
                                   />
                                 </div>
                                 <div>
-                                  <span className="block text-[11px] mb-1 font-semibold" style={{ fontWeight: 700 }}>Telefone</span>
+                                  <span className={`${LABEL_CLASSES.field} block mb-1`}>Telefone</span>
                                   <IonInput
                                     value={editandoMembroTelefoneMasked}
                                     type="tel"
@@ -479,21 +609,21 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                                       setEditandoMembroTelefoneMasked(masked)
                                       setEditandoMembroTelefoneDigits(unmask(masked))
                                     }}
-                                    style={{ fontSize: '10.5px' }}
+                                    style={INPUT_STYLES.default}
                                   />
                                 </div>
                               </div>
 
                               <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                  <span className="block text-[11px] mb-1 font-semibold" style={{ fontWeight: 700 }}>Papel</span>
+                                  <span className={`${LABEL_CLASSES.field} block mb-1`}>Papel</span>
                                   <IonSelect
                                     interface="popover"
                                     value={editandoMembroPapel}
                                     onIonChange={(e) => {
                                       setEditandoMembroPapel(String(e.detail.value ?? 'membro') as 'admin' | 'lider' | 'membro')
                                     }}
-                                    style={{ fontSize: '10.5px' }}
+                                    style={INPUT_STYLES.default}
                                   >
                                     <IonSelectOption value="membro">Membro</IonSelectOption>
                                     <IonSelectOption value="lider">Líder</IonSelectOption>
@@ -501,7 +631,7 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                                   </IonSelect>
                                 </div>
                                 <div>
-                                  <span className="block text-[11px] mb-1 font-semibold" style={{ fontWeight: 700 }}>Funções</span>
+                                  <span className={`${LABEL_CLASSES.field} block mb-1`}>Funções</span>
                                   <IonSelect
                                     multiple
                                     interface="alert"
@@ -511,7 +641,7 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                                     }}
                                     value={editandoMembroFuncoes}
                                     onIonChange={(e) => setEditandoMembroFuncoes((e.detail.value as string[]) ?? [])}
-                                    style={{ fontSize: '10.5px' }}
+                                    style={INPUT_STYLES.default}
                                   >
                                     <IonSelectOption value="voz">Voz</IonSelectOption>
                                     <IonSelectOption value="musico">Músico</IonSelectOption>
@@ -549,14 +679,14 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                             <IonCardHeader className="pb-2">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                  <p className="text-[13px] font-semibold text-slate-100 truncate">
+                                  <p className={`${LABEL_CLASSES.item} truncate`}>
                                     {membro.nome || 'Sem nome'}
                                     {membro.id === user.id && (
-                                      <span className="ml-1 text-[10px] text-emerald-400">(você)</span>
+                                      <span className={`ml-1 ${LABEL_CLASSES.small} text-emerald-400`}>(você)</span>
                                     )}
                                   </p>
                                   <IonCardSubtitle className="mt-1">
-                                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                                    <div className={`flex flex-wrap items-center gap-2 ${LABEL_CLASSES.field} text-slate-400`}>
                                       <span className="truncate">📧 {membro.email || '-'}</span>
                                       {membro.telefone && <span className="truncate">📱 {maskPhoneBR(membro.telefone)}</span>}
                                     </div>
@@ -582,6 +712,26 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                                   >
                                     <IonIcon slot="icon-only" icon={createOutline} />
                                   </IonButton>
+                                  {membro.status === 'aguardando_verificacao' && membro.telefone && (
+                                    <IonButton
+                                      type="button"
+                                      fill="clear"
+                                      size="small"
+                                      onPointerDown={(e) => {
+                                        deferTouchAction(e, () => reenviarConviteWhatsApp(membro))
+                                      }}
+                                      onClick={(e) => {
+                                        if (e.detail !== 0) return
+                                        if (shouldIgnoreClickBecauseTouch()) return
+                                        reenviarConviteWhatsApp(membro)
+                                      }}
+                                      aria-label="Reenviar convite por WhatsApp"
+                                      title="Reenviar convite por WhatsApp"
+                                      className="m-0 h-7"
+                                    >
+                                      <IonIcon slot="icon-only" icon={paperPlaneOutline} />
+                                    </IonButton>
+                                  )}
                                   {membro.id !== user.id && (
                                     <IonButton
                                       type="button"
@@ -624,9 +774,9 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                             </IonCardHeader>
 
                             <IonCardContent className="pt-0">
-                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                              <div className="mt-1 flex items-center justify-between gap-2">
                                 <span
-                                  className={`text-[10px] px-2 py-0.5 rounded-full ${
+                                  className={`${TEXT_CLASSES.badge} ${
                                     membro.papel === 'admin'
                                       ? 'bg-red-500/20 text-red-300'
                                       : membro.papel === 'lider'
@@ -636,20 +786,24 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                                 >
                                   {membro.papel === 'admin' ? 'Admin' : membro.papel === 'lider' ? 'Líder' : 'Membro'}
                                 </span>
-                                {membro.funcoes && membro.funcoes.length > 0 && (
-                                  <div className="flex flex-wrap gap-1">
-                                    {membro.funcoes.map((f) => (
-                                      <span
-                                        key={f}
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/70 text-slate-200 text-[10px]"
-                                      >
-                                        {f === 'voz' ? '🎤' : f === 'musico' ? '🎸' : '•'}
-                                        <span>{f === 'voz' ? 'Voz' : f === 'musico' ? 'Músico' : f}</span>
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
+                                <span className="text-[10px] text-slate-400">
+                                  {membro.status === 'ativo' && 'Ativo'}
+                                  {membro.status === 'aguardando_verificacao' && 'Aguardando verificacao'}
+                                  {membro.status === 'inativo' && 'Inativo'}
+                                </span>
                               </div>
+                              {membro.funcoes && membro.funcoes.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {membro.funcoes.map((f) => (
+                                    <span
+                                      key={f}
+                                      className={`${TEXT_CLASSES.badge} inline-flex items-center bg-slate-800/70 text-slate-200`}
+                                    >
+                                      <span>{f === 'voz' ? 'Voz' : f === 'musico' ? 'Músico' : f}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </IonCardContent>
                           </>
                         )}
@@ -670,7 +824,7 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                       >
                         <IonIcon slot="icon-only" icon={chevronBackOutline} />
                       </IonButton>
-                      <p className="text-[11px] text-slate-400 self-center">
+                      <p className={`${LABEL_CLASSES.field} text-slate-400 self-center`}>
                         Página {paginaMembro} de {totalPaginasMembro}
                       </p>
                       <IonButton
@@ -702,13 +856,13 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
               <IonLabel>Convidar novo membro</IonLabel>
             </IonItem>
             <div slot="content" className="p-4">
-              <p className="text-[11px] text-slate-400 mb-4">
+              <p className={`${LABEL_CLASSES.field} text-slate-400 mb-4`}>
                 Envie um convite por email. O membro receberá um link para criar a senha e ativar a conta.
               </p>
 
               <form onSubmit={handleInviteMembro} className="space-y-3">
                 <IonItem lines="none" className="rounded-xl">
-                  <IonLabel position="stacked" className="text-[11px] font-semibold" style={{ fontWeight: 700 }}>
+                  <IonLabel position="stacked" className={LABEL_CLASSES.field}>
                     Email do membro *
                   </IonLabel>
                   <IonInput
@@ -719,12 +873,12 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                     placeholder="exemplo@igreja.com"
                     onIonChange={(e) => setNovoMembroEmail(String(e.detail.value ?? ''))}
                     required
-                    style={{ fontSize: '10.5px' }}
+                    style={INPUT_STYLES.default}
                   />
                 </IonItem>
 
                 <IonItem lines="none" className="rounded-xl">
-                  <IonLabel position="stacked" className="text-[11px] font-semibold" style={{ fontWeight: 700 }}>
+                  <IonLabel position="stacked" className={LABEL_CLASSES.field}>
                     Nome do membro
                   </IonLabel>
                   <IonInput
@@ -732,13 +886,13 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                     type="text"
                     placeholder="Nome completo"
                     onIonChange={(e) => setNovoMembroNome(String(e.detail.value ?? ''))}
-                    style={{ fontSize: '10.5px' }}
+                    style={INPUT_STYLES.default}
                     required
                   />
                 </IonItem>
 
                 <IonItem lines="none" className="rounded-xl">
-                  <IonLabel position="stacked" className="text-[11px] font-semibold" style={{ fontWeight: 700 }}>
+                  <IonLabel position="stacked" className={LABEL_CLASSES.field}>
                     Telefone
                   </IonLabel>
                   <IonInput
@@ -754,14 +908,14 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                       setNovoMembroTelefoneMasked(masked)
                       setNovoMembroTelefoneDigits(unmask(masked))
                     }}
-                    style={{ fontSize: '10.5px' }}
+                    style={INPUT_STYLES.default}
                   />
                 </IonItem>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <IonItem lines="none" className="rounded-xl">
-                      <IonLabel position="stacked" className="text-[11px] font-semibold" style={{ fontWeight: 700 }}>
+                      <IonLabel position="stacked" className={LABEL_CLASSES.field}>
                         Papel na equipe
                       </IonLabel>
                       <IonSelect
@@ -770,7 +924,7 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                         onIonChange={(e) => {
                           setNovoMembroPapel(String(e.detail.value ?? 'membro') as 'membro' | 'lider' | 'admin')
                         }}
-                        style={{ fontSize: '10.5px' }}
+                        style={INPUT_STYLES.default}
                       >
                         <IonSelectOption value="membro">Membro</IonSelectOption>
                         <IonSelectOption value="lider">Líder</IonSelectOption>
@@ -781,7 +935,7 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
 
                   <div>
                     <IonItem lines="none" className="rounded-xl">
-                      <IonLabel position="stacked" className="text-[11px] font-semibold" style={{ fontWeight: 700 }}>
+                      <IonLabel position="stacked" className={LABEL_CLASSES.field}>
                         Funções
                       </IonLabel>
                       <IonSelect
@@ -793,7 +947,7 @@ export function MembrosPanel({ user }: MembrosPanelProps) {
                         }}
                         value={novoMembroFuncoes}
                         onIonChange={(e) => setNovoMembroFuncoes((e.detail.value as string[]) ?? [])}
-                        style={{ fontSize: '10.5px' }}
+                        style={INPUT_STYLES.default}
                       >
                         <IonSelectOption value="voz">Voz</IonSelectOption>
                         <IonSelectOption value="musico">Músico</IonSelectOption>

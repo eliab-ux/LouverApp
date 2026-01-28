@@ -9,10 +9,13 @@ export type AppUser = {
   email: string
   nome: string | null
   telefone?: string | null
-  papel: 'admin' | 'lider' | 'membro'
+  canal_notificacao?: 'email' | 'whatsapp' | 'ambos'
+  papel: 'admin' | 'lider' | 'membro' | 'super_admin'
   igrejaId: string
   igrejaNome: string | null
   igrejaCnpj?: string | null
+  igrejaWhatsAppHabilitado?: boolean
+  igrejaWhatsAppInstanceId?: string | null
   funcoes?: string[] | null
 }
 
@@ -95,24 +98,44 @@ export type Escalado = {
   funcao: string
   is_ministrante: boolean
   created_at: string
-  usuario?: { id: string; nome: string } | null
+  usuario?: {
+    id: string
+    nome: string
+    email?: string | null
+    telefone?: string | null
+    canal_notificacao?: 'email' | 'whatsapp' | 'ambos'
+  } | null
 }
 
 export type EscalaMusica = {
   id: string
   escala_id: string
-  musica_id: string
+  tipo: 'song' | 'medley'
+  musica_ids: string[]
   tom_escolhido: string | null
   ordem: number
   created_at: string
-  musica?: { id: string; nome: string; tons: string[] | null } | null
+  musicas?: Array<{ id: string; nome: string; tons: string[] | null }> | null
 }
 
 export type Usuario = {
   id: string
   nome: string | null
+  email?: string | null
   papel: 'admin' | 'lider' | 'membro'
   funcoes?: string[] | null
+  telefone?: string | null
+  canal_notificacao?: 'email' | 'whatsapp' | 'ambos'
+}
+
+export type Igreja = {
+  id: string
+  nome: string
+  cnpj?: string | null
+  whatsapp_habilitado: boolean
+  whatsapp_instance_id?: string | null
+  whatsapp_api_key?: string | null
+  created_at: string
 }
 
 // ==========================================

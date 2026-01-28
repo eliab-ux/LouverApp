@@ -19,6 +19,10 @@ import {
 } from 'ionicons/icons'
 import { supabase } from '../../lib/supabase'
 import type { AppUser, Categoria } from '../../types'
+import {
+  LABEL_CLASSES,
+  INPUT_STYLES,
+} from '../../styles/form-styles'
 
 interface CategoriasPanelProps {
   user: AppUser
@@ -202,7 +206,7 @@ export function CategoriasPanel({ user, categorias, onCategoriasChange }: Catego
           <p className="text-sm text-slate-300">Nenhuma categoria cadastrada ainda.</p>
         ) : (
           <>
-            <div className="text-[11px] text-slate-400 mb-3">
+            <div className={`${LABEL_CLASSES.field} text-slate-400 mb-3`}>
               Total: {categorias.length} | Página {paginaCategoria} de {Math.ceil(categorias.length / itensPorPagina)}
             </div>
             <ul className="space-y-2 list-none text-sm text-slate-200">
@@ -222,7 +226,7 @@ export function CategoriasPanel({ user, categorias, onCategoriasChange }: Catego
                             value={categoriaEditandoNome}
                             onIonInput={(e) => setCategoriaEditandoNome(String(e.detail.value ?? ''))}
                             className="flex-1"
-                            style={{ fontSize: '10.5px' }}
+                            style={INPUT_STYLES.default}
                           />
                           <IonButton
                             type="button"
@@ -247,7 +251,7 @@ export function CategoriasPanel({ user, categorias, onCategoriasChange }: Catego
                           </IonButton>
                         </form>
                       ) : (
-                        <span className="flex-1 truncate text-[15px] font-medium text-slate-100">{cat.nome}</span>
+                        <span className={`flex-1 truncate ${LABEL_CLASSES.item}`}>{cat.nome}</span>
                       )}
 
                       {!emEdicao && (user.papel === 'admin' || user.papel === 'lider') && (
@@ -325,7 +329,7 @@ export function CategoriasPanel({ user, categorias, onCategoriasChange }: Catego
                 >
                   <IonIcon slot="icon-only" icon={chevronBackOutline} />
                 </IonButton>
-                <p className="text-[11px] text-slate-400">
+                <p className={`${LABEL_CLASSES.field} text-slate-400`}>
                   Página {paginaCategoria} de {Math.ceil(categorias.length / itensPorPagina)}
                 </p>
                 <IonButton
@@ -360,14 +364,14 @@ export function CategoriasPanel({ user, categorias, onCategoriasChange }: Catego
             <div slot="content" className="p-4">
               <form onSubmit={handleCreateCategoria} className="space-y-3">
                 <IonItem lines="none" className="rounded-xl">
-                  <IonLabel position="stacked" className="text-[11px] font-semibold" style={{ fontWeight: 700 }}>
+                  <IonLabel position="stacked" className={LABEL_CLASSES.field}>
                     Nome da categoria
                   </IonLabel>
                   <IonInput
                     value={novaCategoria}
                     onIonInput={(e) => setNovaCategoria(String(e.detail.value ?? ''))}
                     placeholder="Ex: Louvor, Adoração..."
-                    style={{ fontSize: '10.5px' }}
+                    style={INPUT_STYLES.default}
                   />
                 </IonItem>
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
+import html2canvas from 'html2canvas'
 import { supabase as defaultSupabase } from '../../../lib/supabase'
 import type { InlineToastOptions } from '../../../lib/inlineToastTypes'
 import type {
@@ -76,6 +77,11 @@ export default function useAgenda(opts: {
   const [novaMusicaId, setNovaMusicaId] = useState('')
   const [novaMusicaTom, setNovaMusicaTom] = useState('')
 
+  // Estados para medley
+  const [tipoItemRepertorio, setTipoItemRepertorio] = useState<'song' | 'medley'>('song')
+  const [medleySongIds, setMedleySongIds] = useState<string[]>([])
+  const [medleyModalOpen, setMedleyModalOpen] = useState(false)
+
   const carregarEventos = useCallback(async () => {
     try {
       setEventoError(null)
@@ -149,7 +155,7 @@ export default function useAgenda(opts: {
         .select(
           `
           *,
-          usuario:usuarios(id, nome)
+          usuario:usuarios(id, nome, email, telefone, canal_notificacao)
         `,
         )
         .in(
@@ -197,11 +203,11 @@ export default function useAgenda(opts: {
           `
           id,
           escala_id,
-          musica_id,
+          tipo,
+          musica_ids,
           tom_escolhido,
           ordem,
-          created_at,
-          musica:musicas(id, nome, tons)
+          created_at
         `,
         )
         .in(
@@ -215,7 +221,39 @@ export default function useAgenda(opts: {
         return
       }
 
-      setEscalaMusicas((data as unknown as EscalaMusica[]) ?? [])
+      const items = (data as unknown as EscalaMusica[]) ?? []
+
+      // Para cada item, buscar as músicas correspondentes aos IDs
+      const allMusicIds = new Set<string>()
+      items.forEach((item) => {
+        item.musica_ids.forEach((id) => allMusicIds.add(id))
+      })
+
+      if (allMusicIds.size === 0) {
+        setEscalaMusicas(items)
+        return
+      }
+
+      const { data: musicasData, error: musicasError } = await supabase
+        .from('musicas')
+        .select('id, nome, tons')
+        .in('id', Array.from(allMusicIds))
+
+      if (musicasError) {
+        console.error('Erro ao carregar músicas:', musicasError)
+        setEscalaMusicas(items)
+        return
+      }
+
+      const musicasMap = new Map((musicasData as Array<{ id: string; nome: string; tons: string[] | null }>).map((m) => [m.id, m]))
+
+      // Associar músicas aos itens
+      const itemsComMusicas = items.map((item) => ({
+        ...item,
+        musicas: item.musica_ids.map((id) => musicasMap.get(id)).filter(Boolean) as Array<{ id: string; nome: string; tons: string[] | null }>,
+      }))
+
+      setEscalaMusicas(itemsComMusicas)
     } catch (e) {
       console.error('Erro ao carregar músicas da escala:', e)
     }
@@ -549,9 +587,17 @@ export default function useAgenda(opts: {
 
   const adicionarMusicaEscala = useCallback(
     async (eventoId: string) => {
-      if (!novaMusicaId) {
-        setEscalaError('Selecione uma música.')
-        return
+      // Validação baseada no tipo
+      if (tipoItemRepertorio === 'song') {
+        if (!novaMusicaId) {
+          setEscalaError('Selecione uma música.')
+          return
+        }
+      } else if (tipoItemRepertorio === 'medley') {
+        if (medleySongIds.length === 0) {
+          setEscalaError('Selecione ao menos uma música para o medley.')
+          return
+        }
       }
 
       try {
@@ -563,24 +609,26 @@ export default function useAgenda(opts: {
         const proximaOrdem =
           musicasDoEvento.length > 0 ? Math.max(...musicasDoEvento.map((em) => em.ordem)) + 1 : 1
 
+        const musicaIds = tipoItemRepertorio === 'song' ? [novaMusicaId] : medleySongIds
+
         const { error } = await supabase.from('escala_musicas').insert({
           escala_id: escala.id,
-          musica_id: novaMusicaId,
+          tipo: tipoItemRepertorio,
+          musica_ids: musicaIds,
           tom_escolhido: novaMusicaTom || null,
           ordem: proximaOrdem,
         })
 
         if (error) {
-          if (getErrorCode(error) === '23505') {
-            setEscalaError('Esta música já está na escala deste evento.')
-          } else {
-            setEscalaError(error.message)
-          }
+          setEscalaError(error.message)
           return
         }
 
+        // Resetar estados
         setNovaMusicaId('')
         setNovaMusicaTom('')
+        setMedleySongIds([])
+        setTipoItemRepertorio('song')
         await carregarEscalaMusicas()
 
         await marcarEscalaComoEmEdicao(eventoId)
@@ -597,7 +645,33 @@ export default function useAgenda(opts: {
       novaMusicaTom,
       obterOuCriarEscala,
       supabase,
+      tipoItemRepertorio,
+      medleySongIds,
     ],
+  )
+
+  const reordenarMusicasEscala = useCallback(
+    async (eventoId: string, musicasOrdenadas: EscalaMusica[]) => {
+      try {
+        setEscalaError(null)
+
+        // Atualizar ordem de cada música no banco
+        const updates = musicasOrdenadas.map((musica) =>
+          supabase
+            .from('escala_musicas')
+            .update({ ordem: musica.ordem })
+            .eq('id', musica.id)
+        )
+
+        await Promise.all(updates)
+        await carregarEscalaMusicas()
+        await marcarEscalaComoEmEdicao(eventoId)
+      } catch (e) {
+        console.error('Erro ao reordenar músicas:', e)
+        setEscalaError('Erro ao reordenar músicas.')
+      }
+    },
+    [carregarEscalaMusicas, marcarEscalaComoEmEdicao, supabase]
   )
 
   const removerMusicaEscala = useCallback(
@@ -669,7 +743,7 @@ export default function useAgenda(opts: {
       abrirConfirmacao({
         title: 'Publicar escala',
         message:
-          'Após publicada, os escalados não poderão ser alterados. Músicas poderão ser ajustadas por Admin/Líder e pelos ministrantes. Deseja continuar?',
+          'Após publicada, os escalados serão notificados da escalação. Músicas poderão ser inseridas/ajustadas por Ministrante, Admin e Líder. Membros poderão ser ajustados apenas pelo Admin ou Líder.',
         actionLabel: 'Publicar',
         onConfirm: async () => {
           try {
@@ -690,6 +764,47 @@ export default function useAgenda(opts: {
             showToast({ message: 'Escala publicada com sucesso!', color: 'success' })
             setMensagemSucesso?.('✅ Escala publicada com sucesso!')
             setTimeout(() => setMensagemSucesso?.(null), 4000)
+
+            const evento = eventos.find((e) => e.id === eventoId)
+
+            const enviarNotificacoes = async () => {
+              if (!evento) return
+
+              const escaladosEvento = escalados.filter((e) => e.escala_id === escala.id)
+              if (escaladosEvento.length === 0) return
+
+              const tipoEventoApi = nomeTipoEvento(evento).toLowerCase().includes('ensaio') ? 'ensaio' : 'culto'
+
+              const payloadEscalados = escaladosEvento.map((item) => ({
+                id: item.usuario_id,
+                nome: item.usuario?.nome ?? 'Membro',
+                email: item.usuario?.email ?? '',
+                telefone: item.usuario?.telefone ?? undefined,
+                funcao: item.funcao,
+                canal_notificacao: item.usuario?.canal_notificacao ?? 'email',
+              }))
+
+              const { error: notifyError } = await supabase.functions.invoke('notify_escala_publicada_v2', {
+                body: {
+                  evento: {
+                    id: evento.id,
+                    tipo: tipoEventoApi,
+                    data: evento.data,
+                    hora: evento.hora,
+                  },
+                  escalados: payloadEscalados,
+                  igreja_id: user.igrejaId,
+                  igreja_nome: user.igrejaNome ?? undefined,
+                },
+              })
+
+              if (notifyError) {
+                console.error('Erro ao notificar escalados:', notifyError)
+                showToast({ message: 'Escala publicada, mas as notificacoes falharam.', color: 'warning' })
+              }
+            }
+
+            void enviarNotificacoes()
 
             setEventosPublicadosEmEdicao((prev) => {
               const next = new Set(prev)
@@ -727,6 +842,15 @@ export default function useAgenda(opts: {
         setEventoError('Nenhum evento encontrado neste mês para exportação.')
         return
       }
+
+      // Agrupar eventos por tipo
+      const eventosPorTipo = new Map<string, Evento[]>()
+      eventosList.forEach((ev) => {
+        const tipoNome = nomeTipoEvento(ev)
+        const grupo = eventosPorTipo.get(tipoNome) ?? []
+        grupo.push(ev)
+        eventosPorTipo.set(tipoNome, grupo)
+      })
 
       const escapeHtml = (input: string) =>
         input
@@ -773,49 +897,55 @@ export default function useAgenda(opts: {
       const tituloIgreja = (user.igrejaNome ?? 'Louvor').toUpperCase()
       const mesNome = inicio.toLocaleDateString('pt-BR', { month: 'long' }).toUpperCase()
 
-      const linhas = eventosList
-        .map((ev) => {
-          const escalaId = escalaByEvento.get(ev.id)
-          const escaladosEvento = escalaId ? escaladosPorEscala.get(escalaId) ?? [] : []
+      // Função para gerar linhas HTML dos eventos
+      const gerarLinhasEventos = (eventosDoTipo: Evento[]) => {
+        return eventosDoTipo
+          .map((ev) => {
+            const escalaId = escalaByEvento.get(ev.id)
+            const escaladosEvento = escalaId ? escaladosPorEscala.get(escalaId) ?? [] : []
 
-          const vozes = escaladosEvento.filter((x) => isVoz(x.funcao))
-          const musicos = escaladosEvento.filter((x) => !isVoz(x.funcao))
+            const vozes = escaladosEvento.filter((x) => isVoz(x.funcao))
+            const musicos = escaladosEvento.filter((x) => !isVoz(x.funcao))
 
-          const fmtNome = (x: (typeof escaladosEvento)[number]) => {
-            const nome = (x.usuario?.nome ?? 'Membro').toUpperCase()
-            return x.is_ministrante ? `*${nome}` : nome
-          }
+            const fmtNome = (x: (typeof escaladosEvento)[number]) => {
+              const nome = (x.usuario?.nome ?? 'Membro').toUpperCase()
+              return x.is_ministrante ? `*${nome}` : nome
+            }
 
-          const vozesTxt = vozes.length > 0 ? vozes.map(fmtNome).join(', ') : '-'
-          const musicosTxt = musicos.length > 0 ? musicos.map(fmtNome).join(', ') : '-'
+            const vozesTxt = vozes.length > 0 ? vozes.map(fmtNome).join(', ') : '-'
+            const musicosTxt = musicos.length > 0 ? musicos.map(fmtNome).join(', ') : '-'
 
-          const d = new Date(ev.data + 'T00:00:00')
-          const dd = String(d.getDate()).padStart(2, '0')
-          const mm2 = String(d.getMonth() + 1).padStart(2, '0')
-          const diaSemana = formatDiaSemana(ev.data)
+            const d = new Date(ev.data + 'T00:00:00')
+            const dd = String(d.getDate()).padStart(2, '0')
+            const mm2 = String(d.getMonth() + 1).padStart(2, '0')
+            const diaSemana = formatDiaSemana(ev.data)
 
-          return `
-            <div class="row">
-              <div class="cell cell-date">
-                <div class="date">${dd}/${mm2}</div>
-                <div class="dow">${diaSemana}</div>
+            return `
+              <div class="row">
+                <div class="cell cell-date">
+                  <div class="date">${dd}/${mm2}</div>
+                  <div class="dow">${diaSemana}</div>
+                </div>
+                <div class="cell cell-body">${escapeHtml(vozesTxt)}</div>
+                <div class="cell cell-body">${escapeHtml(musicosTxt)}</div>
               </div>
-              <div class="cell cell-body">${escapeHtml(vozesTxt)}</div>
-              <div class="cell cell-body">${escapeHtml(musicosTxt)}</div>
-            </div>
-          `
-        })
-        .join('')
+            `
+          })
+          .join('')
+      }
 
-      const html = `<!DOCTYPE html>
+      // Função para gerar HTML completo de um tipo específico
+      const gerarHtmlTipo = (tipoNome: string, eventosDoTipo: Evento[]) => {
+        const linhas = gerarLinhasEventos(eventosDoTipo)
+        return `<!DOCTYPE html>
         <html>
           <head>
             <meta charSet="utf-8" />
-            <title>${escapeHtml(tituloIgreja)} - Escala Mensal</title>
+            <title>${escapeHtml(tituloIgreja)} - ${escapeHtml(tipoNome)}</title>
             <style>
               @page { margin: 18mm 14mm; }
               body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; color: #e2e8f0; background: #061c32; }
-              .wrap { width: 100%; }
+              .wrap { width: 100%; padding-bottom: 20px; }
               .header { background: #062a4a; padding: 26px 24px 18px 24px; text-align: center; }
               .title { font-weight: 800; letter-spacing: 0.16em; font-size: 34px; margin: 0; color: #ffffff; }
               .subtitle { margin: 8px 0 0 0; font-size: 12px; letter-spacing: 0.18em; color: #cbd5e1; }
@@ -835,7 +965,7 @@ export default function useAgenda(opts: {
             <div class="wrap">
               <div class="header">
                 <h1 class="title">${escapeHtml(tituloIgreja)}</h1>
-                <p class="subtitle">ESCALA MENSAL — MÊS DE ${escapeHtml(mesNome)}</p>
+                <p class="subtitle">ESCALA ${escapeHtml(tipoNome.toUpperCase())} — MÊS DE ${escapeHtml(mesNome)}</p>
               </div>
               <div class="content">
                 <div class="table">
@@ -850,18 +980,69 @@ export default function useAgenda(opts: {
             </div>
           </body>
         </html>`
+      }
 
-      const janela = window.open('', '_blank')
-      if (!janela) return
-      janela.document.write(html)
-      janela.document.close()
-      janela.focus()
-      janela.print()
+      // Gerar PNG para cada tipo de evento
+      let processados = 0
+      const totalTipos = eventosPorTipo.size
+
+      eventosPorTipo.forEach((eventosDoTipo, tipoNome) => {
+        const html = gerarHtmlTipo(tipoNome, eventosDoTipo)
+
+        // Criar elemento temporário no DOM para renderizar
+        const tempDiv = document.createElement('div')
+        tempDiv.style.position = 'absolute'
+        tempDiv.style.left = '-9999px'
+        tempDiv.style.top = '0'
+        tempDiv.style.width = '800px'
+        tempDiv.innerHTML = html
+        document.body.appendChild(tempDiv)
+
+        // Aguardar renderização antes de capturar
+        setTimeout(() => {
+          html2canvas(tempDiv, {
+            backgroundColor: '#061c32',
+            scale: 2,
+            logging: false,
+            useCORS: true,
+            windowHeight: tempDiv.scrollHeight,
+            height: tempDiv.scrollHeight,
+          })
+            .then((canvas) => {
+              document.body.removeChild(tempDiv)
+
+              canvas.toBlob((blob) => {
+                if (!blob) return
+
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                const tipoSlug = tipoNome.toLowerCase().replace(/\s+/g, '-')
+                a.download = `escala-${tipoSlug}-${mesNome.toLowerCase()}-${yyyy}.png`
+                a.click()
+                URL.revokeObjectURL(url)
+
+                processados++
+                if (processados === totalTipos) {
+                  setMensagemSucesso?.(`${totalTipos} arquivo(s) PNG exportado(s)!`)
+                  showToast({ message: `${totalTipos} arquivo(s) PNG gerado(s) com sucesso!`, color: 'success' })
+                }
+              }, 'image/png')
+            })
+            .catch((err) => {
+              if (document.body.contains(tempDiv)) {
+                document.body.removeChild(tempDiv)
+              }
+              console.error('Erro ao gerar PNG:', err)
+              showToast({ message: `Erro ao gerar PNG para ${tipoNome}.`, color: 'danger' })
+            })
+        }, 100 * Array.from(eventosPorTipo.keys()).indexOf(tipoNome)) // Delay progressivo
+      })
     } catch (e) {
       console.error(e)
-      setEventoError('Erro ao gerar PDF da escala mensal.')
+      setEventoError('Erro ao gerar PNG da escala mensal.')
     }
-  }, [escalados, escalas, eventos, mesExportacao, user.igrejaNome])
+  }, [escalados, escalas, eventos, mesExportacao, user.igrejaNome, nomeTipoEvento, setMensagemSucesso, showToast])
 
   return {
     EVENTOS_POR_PAGINA,
@@ -914,6 +1095,14 @@ export default function useAgenda(opts: {
     novaMusicaTom,
     setNovaMusicaTom,
 
+    // medley support
+    tipoItemRepertorio,
+    setTipoItemRepertorio,
+    medleySongIds,
+    setMedleySongIds,
+    medleyModalOpen,
+    setMedleyModalOpen,
+
     // actions
     nomeTipoEvento,
     criarEvento,
@@ -923,6 +1112,7 @@ export default function useAgenda(opts: {
     alternarMinistrante,
     removerEscalado,
     adicionarMusicaEscala,
+    reordenarMusicasEscala,
     removerMusicaEscala,
     handleImprimirEscalaMensal,
 

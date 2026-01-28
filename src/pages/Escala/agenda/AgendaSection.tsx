@@ -1,4 +1,6 @@
 import {
+  IonAccordion,
+  IonAccordionGroup,
   IonButton,
   IonCard,
   IonDatetime,
@@ -10,6 +12,11 @@ import {
   IonModal,
   IonSelect,
   IonSelectOption,
+  IonSegment,
+  IonSegmentButton,
+  IonLabel,
+  IonReorderGroup,
+  IonReorder,
 } from '@ionic/react'
 import {
   addOutline,
@@ -17,14 +24,15 @@ import {
   downloadOutline,
   createOutline,
   closeOutline,
-  checkmarkOutline,
+  globeOutline,
   star,
   starOutline,
   chevronBackOutline,
   chevronForwardOutline,
+  musicalNote,
 } from 'ionicons/icons'
+import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import type { CSSProperties } from 'react'
 import type {
   AppUser,
   Evento,
@@ -36,6 +44,14 @@ import type {
   TipoEvento,
   Usuario,
 } from '../../../types'
+import {
+  LABEL_CLASSES,
+  INPUT_STYLES,
+  BUTTON_STYLES,
+  TEXT_CLASSES,
+} from '../../../styles/form-styles'
+import { MedleyPickerModal } from './MedleyPickerModal'
+import { MemberPickerModal } from './MemberPickerModal'
 
 export default function AgendaSection(props: {
   user: AppUser
@@ -91,7 +107,16 @@ export default function AgendaSection(props: {
   setNovaMusicaId: (v: string) => void
   novaMusicaTom: string
   setNovaMusicaTom: (v: string) => void
+
+  tipoItemRepertorio: 'song' | 'medley'
+  setTipoItemRepertorio: (v: 'song' | 'medley') => void
+  medleySongIds: string[]
+  setMedleySongIds: (v: string[]) => void
+  medleyModalOpen: boolean
+  setMedleyModalOpen: (v: boolean) => void
+
   adicionarMusicaEscala: (eventoId: string) => void
+  reordenarMusicasEscala: (eventoId: string, musicasOrdenadas: EscalaMusica[]) => void
 
   removerMusicaEscala: (id: string) => void
   alternarMinistrante: (id: string, next: boolean) => void
@@ -100,6 +125,12 @@ export default function AgendaSection(props: {
   publicarEscala: (eventoId: string) => void
   excluirEvento: (eventoId: string) => void
 }) {
+  // Ref para controlar o modal de data (fecha automaticamente ao selecionar)
+  const modalDataRef = useRef<HTMLIonModalElement>(null)
+
+  // Estado para controlar o modal de seleção de membro
+  const [memberPickerOpen, setMemberPickerOpen] = useState(false)
+
   const {
     user,
     mesExportacao,
@@ -142,7 +173,14 @@ export default function AgendaSection(props: {
     setNovaMusicaId,
     novaMusicaTom,
     setNovaMusicaTom,
+    tipoItemRepertorio,
+    setTipoItemRepertorio,
+    medleySongIds,
+    setMedleySongIds,
+    medleyModalOpen,
+    setMedleyModalOpen,
     adicionarMusicaEscala,
+    reordenarMusicasEscala,
     removerMusicaEscala,
     alternarMinistrante,
     removerEscalado,
@@ -150,16 +188,7 @@ export default function AgendaSection(props: {
     excluirEvento,
   } = props
 
-  const selectStyleSmall: CSSProperties & Record<string, string> = {
-    fontSize: '11px',
-    ['--placeholder-color']: '#94a3b8',
-    ['--color']: '#e2e8f0',
-  }
-
-  const buttonPaddingStyle: CSSProperties & Record<string, string> = {
-    ['--padding-start']: '14px',
-    ['--padding-end']: '14px',
-  }
+  // Estilos removidos - usando constantes globais de form-styles.ts
 
   const normalizeDateOnly = (value: string) => {
     const v = String(value)
@@ -191,7 +220,7 @@ export default function AgendaSection(props: {
         {(user.papel === 'admin' || user.papel === 'lider') && (
           <div className="mb-3 flex items-end justify-between gap-2 flex-wrap">
             <div>
-              <label className="block text-[10px] text-slate-400 mb-1" htmlFor="mesExportacao">
+              <label className={LABEL_CLASSES.small + ' block mb-1'} htmlFor="mesExportacao">
                 Mês para exportação
               </label>
               <input
@@ -208,8 +237,9 @@ export default function AgendaSection(props: {
               fill="clear"
               size="small"
               onClick={handleImprimirEscalaMensal}
-              aria-label="Baixar PDF da escala mensal"
+              aria-label="Baixar PNG da escala mensal"
               className="m-0 h-7"
+              style={BUTTON_STYLES.icon}
             >
               <IonIcon slot="icon-only" icon={downloadOutline} />
             </IonButton>
@@ -236,7 +266,7 @@ export default function AgendaSection(props: {
                 )
                 setPaginaEventos(1)
               }}
-              style={selectStyleSmall}
+              style={INPUT_STYLES.selectSmall}
               interfaceOptions={{ cssClass: 'musicas-select-popover-small' }}
             >
               <IonSelectOption value="todos">Todos</IonSelectOption>
@@ -246,115 +276,135 @@ export default function AgendaSection(props: {
             </IonSelect>
           </div>
 
-          <p className="text-[10px] text-slate-400 text-right">
+          <p className={`${LABEL_CLASSES.small} text-right`}>
             {eventosFiltradosPorStatus.length} evento{eventosFiltradosPorStatus.length !== 1 ? 's' : ''}
           </p>
         </div>
       </IonCard>
 
       {(user.papel === 'admin' || user.papel === 'lider') && (
-        <IonCard className="p-3 shadow-sm">
-          {(eventoError || escalaError) && (
-            <p className="mb-3 text-[11px] text-red-300 bg-red-950/40 rounded-xl px-3 py-2">
-              {eventoError || escalaError}
-            </p>
-          )}
+        <div className="rounded-xl bg-white dark:bg-neutral-800 overflow-hidden">
+          <IonAccordionGroup>
+            <IonAccordion value="criar-evento">
+              <IonItem slot="header" className="px-4 py-2">
+                <IonLabel>
+                  <h2 className="text-base md:text-lg font-semibold text-neutral-900 dark:text-neutral-100">Criar Evento</h2>
+                </IonLabel>
+              </IonItem>
 
-          <form onSubmit={criarEvento} className="rounded-2xl bg-slate-900/60 p-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="col-span-2 md:col-span-1">
-                <IonSelect
-                  label="Tipo *"
-                  labelPlacement="stacked"
-                  value={novoEventoTipoEventoId}
-                  interface="popover"
-                  placeholder="Selecione"
-                  onClick={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onIonChange={(e) => setNovoEventoTipoEventoId(String(e.detail.value ?? ''))}
-                  style={{ width: '100%', ...selectStyleSmall }}
-                >
-                  {(tiposEvento.length > 0
-                    ? tiposEvento
-                    : ([
-                        { id: '11111111-1111-1111-1111-111111111111', nome: 'Culto', ordem: 1 },
-                        { id: '22222222-2222-2222-2222-222222222222', nome: 'Ensaio', ordem: 2 },
-                      ] as TipoEvento[])
-                  ).map((t) => (
-                    <IonSelectOption key={t.id} value={t.id}>
-                      {t.nome}
-                    </IonSelectOption>
-                  ))}
-                </IonSelect>
-              </div>
+              <div slot="content" className="p-4 space-y-4">
+                {(eventoError || escalaError) && (
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-error-50 dark:bg-error-900/20">
+                    <span className="text-error-600 dark:text-error-400 text-sm">⚠️</span>
+                    <p className="text-xs md:text-sm text-error-700 dark:text-error-300">
+                      {eventoError || escalaError}
+                    </p>
+                  </div>
+                )}
 
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-1" htmlFor="dataEvento">
-                  Data *
-                </label>
-                <div
-                  className="rounded-xl bg-slate-900/60 p-3"
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-slate-200">
-                      {novoEventoData ? formatDatePtBr(novoEventoData) || 'Selecionar data' : 'Selecionar data'}
-                    </span>
-                    <IonDatetimeButton datetime="dataEvento" className="datetime-button-small" />
+                <form onSubmit={criarEvento} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <IonSelect
+                        label="Tipo *"
+                        labelPlacement="stacked"
+                        value={novoEventoTipoEventoId}
+                        interface="popover"
+                        placeholder="Selecione"
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onIonChange={(e) => setNovoEventoTipoEventoId(String(e.detail.value ?? ''))}
+                        style={{ width: '100%', ...INPUT_STYLES.selectSmall }}
+                      >
+                        {(tiposEvento.length > 0
+                          ? tiposEvento
+                          : ([
+                              { id: '11111111-1111-1111-1111-111111111111', nome: 'Culto', ordem: 1 },
+                              { id: '22222222-2222-2222-2222-222222222222', nome: 'Ensaio', ordem: 2 },
+                            ] as TipoEvento[])
+                        ).map((t) => (
+                          <IonSelectOption key={t.id} value={t.id}>
+                            {t.nome}
+                          </IonSelectOption>
+                        ))}
+                      </IonSelect>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-medium text-neutral-700 dark:text-neutral-300 mb-1.5" htmlFor="dataEvento">
+                        Data *
+                      </label>
+                      <div
+                        className="rounded-lg bg-neutral-50 dark:bg-neutral-700 px-3 py-2"
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-neutral-900 dark:text-neutral-100">
+                            {novoEventoData ? formatDatePtBr(novoEventoData) || 'Selecionar data' : 'Selecionar data'}
+                          </span>
+                          <IonDatetimeButton datetime="dataEvento" className="datetime-button-small" />
+                        </div>
+
+                        <IonModal ref={modalDataRef} keepContentsMounted>
+                          <IonDatetime
+                            id="dataEvento"
+                            presentation="date"
+                            locale="pt-BR"
+                            formatOptions={{ date: { day: '2-digit', month: '2-digit', year: 'numeric' } }}
+                            value={novoEventoData ? normalizeDateOnly(novoEventoData) : undefined}
+                            min={new Date().toISOString().split('T')[0]}
+                            onIonChange={(e) => {
+                              const next = String(e.detail.value ?? '')
+                              setNovoEventoData(normalizeDateOnly(next))
+                              modalDataRef.current?.dismiss()
+                            }}
+                          />
+                        </IonModal>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-medium text-neutral-700 dark:text-neutral-300 mb-1.5" htmlFor="horaEvento">
+                        Hora *
+                      </label>
+                      <div
+                        className="rounded-lg bg-neutral-50 dark:bg-neutral-700 px-3 py-2"
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-neutral-900 dark:text-neutral-100">{novoEventoHora || 'Selecionar hora'}</span>
+                          <IonDatetimeButton datetime="horaEvento" className="datetime-button-small" />
+                        </div>
+
+                        <IonModal keepContentsMounted>
+                          <IonDatetime
+                            id="horaEvento"
+                            presentation="time"
+                            value={novoEventoHora ? timeValueForDatetime(novoEventoHora) : undefined}
+                            onIonChange={(e) => {
+                              const next = String(e.detail.value ?? '')
+                              setNovoEventoHora(normalizeTimeHHMM(next))
+                            }}
+                          />
+                        </IonModal>
+                      </div>
+                    </div>
                   </div>
 
-                  <IonModal keepContentsMounted>
-                    <IonDatetime
-                      id="dataEvento"
-                      presentation="date"
-                      locale="pt-BR"
-                      formatOptions={{ date: { day: '2-digit', month: '2-digit', year: 'numeric' } }}
-                      value={novoEventoData ? normalizeDateOnly(novoEventoData) : undefined}
-                      min={new Date().toISOString().split('T')[0]}
-                      onIonChange={(e) => {
-                        const next = String(e.detail.value ?? '')
-                        setNovoEventoData(normalizeDateOnly(next))
-                      }}
-                    />
-                  </IonModal>
-                </div>
+                  <IonButton
+                    type="submit"
+                    expand="block"
+                    size="small"
+                    style={BUTTON_STYLES.primary}
+                    className="mt-4"
+                  >
+                    Criar Evento
+                  </IonButton>
+                </form>
               </div>
-
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-1" htmlFor="horaEvento">
-                  Hora *
-                </label>
-                <div
-                  className="rounded-xl bg-slate-900/60 p-3"
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-slate-200">{novoEventoHora || 'Selecionar hora'}</span>
-                    <IonDatetimeButton datetime="horaEvento" className="datetime-button-small" />
-                  </div>
-
-                  <IonModal keepContentsMounted>
-                    <IonDatetime
-                      id="horaEvento"
-                      presentation="time"
-                      value={novoEventoHora ? timeValueForDatetime(novoEventoHora) : undefined}
-                      onIonChange={(e) => {
-                        const next = String(e.detail.value ?? '')
-                        setNovoEventoHora(normalizeTimeHHMM(next))
-                      }}
-                    />
-                  </IonModal>
-                </div>
-              </div>
-
-              <div className="col-span-2 md:col-span-4">
-                <IonButton type="submit" expand="block" size="small" style={buttonPaddingStyle}>
-                  Criar Evento
-                </IonButton>
-              </div>
-            </div>
-          </form>
-        </IonCard>
+            </IonAccordion>
+          </IonAccordionGroup>
+        </div>
       )}
 
       {eventos.length === 0 ? (
@@ -389,7 +439,7 @@ export default function AgendaSection(props: {
                 <IonCard key={evento.id} className="p-3 shadow-sm">
                   <div className="flex justify-between items-start gap-3">
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-[13px] font-bold text-slate-100 truncate">
+                      <h3 className={`${LABEL_CLASSES.item} truncate`}>
                         {nomeTipoEvento(evento)} {new Date(evento.data + 'T00:00:00').toLocaleDateString('pt-BR')} às{' '}
                         {evento.hora}
                       </h3>
@@ -397,15 +447,15 @@ export default function AgendaSection(props: {
 
                     <div className="flex items-start gap-2 flex-wrap justify-end">
                       {escalaPublicadaEmEdicao ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400 text-slate-900 whitespace-nowrap font-semibold">
+                        <span className={`${TEXT_CLASSES.badge} bg-amber-400 text-slate-900 whitespace-nowrap`}>
                           🟡 Publicado (Em edição)
                         </span>
                       ) : escalaPublicada ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500 text-slate-900 whitespace-nowrap font-semibold">
+                        <span className={`${TEXT_CLASSES.badge} bg-emerald-500 text-slate-900 whitespace-nowrap`}>
                           🟢 Escala publicada
                         </span>
                       ) : (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-200 whitespace-nowrap font-semibold">
+                        <span className={`${TEXT_CLASSES.badge} bg-red-500/10 text-red-200 whitespace-nowrap`}>
                           🔴 Escala não publicada
                         </span>
                       )}
@@ -413,45 +463,82 @@ export default function AgendaSection(props: {
                   </div>
 
                   <div className="mt-2 space-y-1">
-                    <p className="text-[11px] text-slate-400">🎵 Músicas</p>
+                    <p className={`${LABEL_CLASSES.field} text-slate-400`}>🎵 Músicas</p>
 
                     {musicasDoEvento.length > 0 ? (
-                      <ul className="text-[11px] pl-4 list-disc space-y-0.5 text-slate-200">
-                        {musicasDoEvento.map((em) => (
-                          <li key={em.id} className="flex items-start justify-between gap-2">
-                            <span className="min-w-0">
-                              {em.musica?.nome ?? 'Música'}{em.tom_escolhido ? ` | Tom: ${em.tom_escolhido}` : ''}
-                            </span>
-                            {podeEditarMusicas && (
-                              <IonButton
-                                type="button"
-                                fill="clear"
-                                size="small"
-                                color="danger"
-                                onClick={() => removerMusicaEscala(em.id)}
-                                aria-label="Remover música"
-                                className="m-0 h-7"
-                              >
-                                <IonIcon slot="icon-only" icon={trashOutline} />
-                              </IonButton>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="space-y-2">
+                        <IonReorderGroup
+                          disabled={!podeEditarMusicas}
+                          onIonItemReorder={(event) => {
+                            const from = event.detail.from
+                            const to = event.detail.to
+                            const reordered = [...musicasDoEvento]
+                            const [movedItem] = reordered.splice(from, 1)
+                            reordered.splice(to, 0, movedItem)
+
+                            // Atualizar a ordem no array
+                            const musicasComNovaOrdem = reordered.map((m, idx) => ({
+                              ...m,
+                              ordem: idx + 1
+                            }))
+
+                            reordenarMusicasEscala(evento.id, musicasComNovaOrdem)
+                            event.detail.complete()
+                          }}
+                        >
+                          {musicasDoEvento.map((em) => {
+                            const nomesMusicas = em.musicas && em.musicas.length > 0
+                              ? em.musicas.map((m) => m.nome).join(' / ')
+                              : 'Músicas'
+
+                            return (
+                              <IonItem key={em.id} lines="none" className="rounded-xl bg-slate-900/40 mb-2">
+                                <IonLabel className="py-2">
+                                  <span className={LABEL_CLASSES.field}>
+                                    {nomesMusicas}
+                                    {em.tom_escolhido ? ` | Tom: ${em.tom_escolhido}` : ''}
+                                  </span>
+                                </IonLabel>
+
+                                {podeEditarMusicas && (
+                                  <>
+                                    <IonButton
+                                      slot="end"
+                                      type="button"
+                                      fill="clear"
+                                      size="small"
+                                      color="danger"
+                                      onClick={() => removerMusicaEscala(em.id)}
+                                      aria-label="Remover música"
+                                      className="m-0"
+                                    >
+                                      <IonIcon slot="icon-only" icon={trashOutline} />
+                                    </IonButton>
+
+                                    <IonReorder slot="end">
+                                      <IonIcon icon={musicalNote} className="text-slate-400" />
+                                    </IonReorder>
+                                  </>
+                                )}
+                              </IonItem>
+                            )
+                          })}
+                        </IonReorderGroup>
+                      </div>
                     ) : (
-                      <p className="text-[11px] text-slate-400">Nenhuma música adicionada para este evento.</p>
+                      <p className={`${LABEL_CLASSES.field} text-slate-400`}>Nenhuma música adicionada para este evento.</p>
                     )}
                   </div>
 
                   <div className="space-y-1">
-                    <p className="text-[11px] text-slate-400">👤 Membros escalados</p>
+                    <p className={`${LABEL_CLASSES.field} text-slate-400`}>👤 Membros escalados</p>
 
                     {escaladosDoEvento.length > 0 ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {escaladosDoEvento.map((esc) => (
                           <div
                             key={esc.id}
-                            className="flex items-center justify-between gap-2 text-[11px] text-slate-200"
+                            className={`flex items-center justify-between gap-2 ${LABEL_CLASSES.field} text-slate-200`}
                           >
                             <div className="min-w-0 flex items-center gap-2 flex-wrap">
                               <span className="font-medium truncate">{esc.usuario?.nome ?? 'Membro'}</span>
@@ -488,7 +575,7 @@ export default function AgendaSection(props: {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-[11px] text-slate-400">Nenhum membro escalado ainda para este evento.</p>
+                      <p className={`${LABEL_CLASSES.field} text-slate-400`}>Nenhum membro escalado ainda para este evento.</p>
                     )}
                   </div>
 
@@ -514,7 +601,7 @@ export default function AgendaSection(props: {
                         aria-label="Publicar escala"
                         className="m-0 h-7"
                       >
-                        <IonIcon slot="icon-only" icon={checkmarkOutline} />
+                        <IonIcon slot="icon-only" icon={globeOutline} />
                       </IonButton>
                     )}
                     {user.papel === 'admin' && (
@@ -538,48 +625,20 @@ export default function AgendaSection(props: {
                         <>
                           <IonList className="bg-transparent p-0">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                              <IonItem lines="none" className="rounded-xl bg-slate-900/60">
-                                <IonSelect
-                                  label="Membro"
-                                  labelPlacement="stacked"
-                                  value={novoEscaladoUsuarioId}
-                                  interface="popover"
-                                  placeholder="Selecione um membro"
-                                  onClick={(e) => e.stopPropagation()}
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                  onIonChange={(e) => setNovoEscaladoUsuarioId(String(e.detail.value ?? ''))}
-                                  style={selectStyleSmall}
-                                >
-                                  <IonSelectOption value="">Selecione um membro</IonSelectOption>
-                                  {membros
-                                    .filter((membro) => {
-                                      const funcoes = membro.funcoes ?? []
-                                      const temPerfil = funcoes.includes('voz') || funcoes.includes('musico')
-                                      const isCurrentUser = membro.id === user.id
-
-                                      if (!temPerfil && !isCurrentUser) return false
-
-                                      const indispDoMembro = todasIndisponibilidades.filter((ind) => ind.usuario_id === membro.id)
-                                      const estaIndisponivel = indispDoMembro.some((ind) => {
-                                        const inicio = ind.data
-                                        const fim = ind.data_fim ?? ind.data
-                                        return evento.data >= inicio && evento.data <= fim
-                                      })
-                                      return !estaIndisponivel
-                                    })
-                                    .map((membro) => {
-                                      const funcoesTexto = (membro.funcoes ?? [])
-                                        .map((f) => (f === 'voz' ? 'Voz' : f === 'musico' ? 'Músico' : f))
-                                        .join(', ')
-
-                                      return (
-                                        <IonSelectOption key={membro.id} value={membro.id}>
-                                          {membro.nome ?? 'Sem nome'} ({membro.papel}
-                                          {funcoesTexto ? ` • ${funcoesTexto}` : ''})
-                                        </IonSelectOption>
-                                      )
-                                    })}
-                                </IonSelect>
+                              <IonItem
+                                lines="none"
+                                className="rounded-xl bg-slate-900/60 cursor-pointer"
+                                button
+                                onClick={() => setMemberPickerOpen(true)}
+                              >
+                                <div className="flex flex-col py-2 w-full">
+                                  <label className={LABEL_CLASSES.field + ' text-slate-400'}>Membro</label>
+                                  <div className={LABEL_CLASSES.field + ' mt-1'}>
+                                    {novoEscaladoUsuarioId
+                                      ? membros.find((m) => m.id === novoEscaladoUsuarioId)?.nome ?? 'Selecione um membro'
+                                      : 'Selecione um membro'}
+                                  </div>
+                                </div>
                               </IonItem>
 
                               <IonItem lines="none" className="rounded-xl bg-slate-900/60">
@@ -592,6 +651,7 @@ export default function AgendaSection(props: {
                                   onPointerDown={(e) => e.stopPropagation()}
                                   onIonInput={(e) => setNovoEscaladoFuncao(String(e.detail.value ?? ''))}
                                   placeholder="Ex: Voz, Teclado, Bateria..."
+                                  style={INPUT_STYLES.default}
                                 />
                               </IonItem>
 
@@ -615,75 +675,156 @@ export default function AgendaSection(props: {
 
                       {podeEditarMusicas && (
                         <>
+                          {/* Seletor de tipo: Música ou Medley */}
+                          <IonSegment
+                            value={tipoItemRepertorio}
+                            onIonChange={(e) => {
+                              const val = e.detail.value as 'song' | 'medley'
+                              setTipoItemRepertorio(val)
+                              setNovaMusicaId('')
+                              setNovaMusicaTom('')
+                              setMedleySongIds([])
+                            }}
+                            className="mb-2"
+                          >
+                            <IonSegmentButton value="song">
+                              <IonLabel className={LABEL_CLASSES.small}>Música</IonLabel>
+                            </IonSegmentButton>
+                            <IonSegmentButton value="medley">
+                              <IonLabel className={LABEL_CLASSES.small}>Medley</IonLabel>
+                            </IonSegmentButton>
+                          </IonSegment>
+
                           <IonList className="bg-transparent p-0">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                              <IonItem lines="none" className="rounded-xl bg-slate-900/60">
-                                <IonSelect
-                                  label="Música"
-                                  labelPlacement="stacked"
-                                  value={novaMusicaId}
-                                  interface="popover"
-                                  placeholder="Selecione uma música"
-                                  onClick={(e) => e.stopPropagation()}
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                  onIonChange={(e) => {
-                                    setNovaMusicaId(String(e.detail.value ?? ''))
-                                    setNovaMusicaTom('')
-                                  }}
-                                  style={selectStyleSmall}
-                                >
-                                  <IonSelectOption value="">Selecione uma música</IonSelectOption>
-                                  {musicas.map((m) => (
-                                    <IonSelectOption key={m.id} value={m.id}>
-                                      {m.nome}
-                                    </IonSelectOption>
-                                  ))}
-                                </IonSelect>
-                              </IonItem>
+                            {tipoItemRepertorio === 'song' ? (
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                <IonItem lines="none" className="rounded-xl bg-slate-900/60">
+                                  <IonSelect
+                                    label="Música"
+                                    labelPlacement="stacked"
+                                    value={novaMusicaId}
+                                    interface="popover"
+                                    placeholder="Selecione uma música"
+                                    onClick={(e) => e.stopPropagation()}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                    onIonChange={(e) => {
+                                      setNovaMusicaId(String(e.detail.value ?? ''))
+                                      setNovaMusicaTom('')
+                                    }}
+                                    style={INPUT_STYLES.selectSmall}
+                                  >
+                                    <IonSelectOption value="">Selecione uma música</IonSelectOption>
+                                    {musicas.map((m) => (
+                                      <IonSelectOption key={m.id} value={m.id}>
+                                        {m.nome}
+                                      </IonSelectOption>
+                                    ))}
+                                  </IonSelect>
+                                </IonItem>
 
-                              <IonItem lines="none" className="rounded-xl bg-slate-900/60">
-                                {(() => {
-                                  const musica = musicas.find((m) => m.id === novaMusicaId)
-                                  const tonsDisponiveis = musica?.tons ?? []
+                                <IonItem lines="none" className="rounded-xl bg-slate-900/60">
+                                  {(() => {
+                                    const musica = musicas.find((m) => m.id === novaMusicaId)
+                                    const tonsDisponiveis = musica?.tons ?? []
 
-                                  return (
-                                    <IonSelect
-                                      label="Tom"
-                                      labelPlacement="stacked"
-                                      value={novaMusicaTom}
-                                      interface="popover"
-                                      placeholder={tonsDisponiveis.length > 0 ? 'Selecione o tom' : 'Digite o tom'}
-                                      onClick={(e) => e.stopPropagation()}
-                                      onPointerDown={(e) => e.stopPropagation()}
-                                      onIonChange={(e) => setNovaMusicaTom(String(e.detail.value ?? ''))}
-                                      style={selectStyleSmall}
-                                    >
-                                      <IonSelectOption value="">Selecione o tom</IonSelectOption>
-                                      {tonsDisponiveis.map((tom) => (
-                                        <IonSelectOption key={tom} value={tom}>
-                                          {tom}
-                                        </IonSelectOption>
-                                      ))}
-                                    </IonSelect>
-                                  )
-                                })()}
-                              </IonItem>
+                                    return (
+                                      <IonSelect
+                                        label="Tom"
+                                        labelPlacement="stacked"
+                                        value={novaMusicaTom}
+                                        interface="popover"
+                                        placeholder={tonsDisponiveis.length > 0 ? 'Selecione o tom' : 'Digite o tom'}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onIonChange={(e) => setNovaMusicaTom(String(e.detail.value ?? ''))}
+                                        style={INPUT_STYLES.selectSmall}
+                                      >
+                                        <IonSelectOption value="">Selecione o tom</IonSelectOption>
+                                        {tonsDisponiveis.map((tom) => (
+                                          <IonSelectOption key={tom} value={tom}>
+                                            {tom}
+                                          </IonSelectOption>
+                                        ))}
+                                      </IonSelect>
+                                    )
+                                  })()}
+                                </IonItem>
 
-                              <div className="flex items-end">
-                                <IonButton
-                                  type="button"
-                                  fill="clear"
-                                  size="small"
-                                  onClick={() => adicionarMusicaEscala(evento.id)}
-                                  disabled={!podeEditarMusicas}
-                                  aria-label="Adicionar música"
-                                  className="m-0 h-7"
-                                >
-                                  <IonIcon icon={addOutline} />
-                                </IonButton>
+                                <div className="flex items-end">
+                                  <IonButton
+                                    type="button"
+                                    fill="clear"
+                                    size="small"
+                                    onClick={() => adicionarMusicaEscala(evento.id)}
+                                    disabled={!podeEditarMusicas}
+                                    aria-label="Adicionar música"
+                                    className="m-0 h-7"
+                                  >
+                                    <IonIcon icon={addOutline} />
+                                  </IonButton>
+                                </div>
                               </div>
-                            </div>
+                            ) : (
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                <IonItem lines="none" className="rounded-xl bg-slate-900/60">
+                                  <IonButton
+                                    expand="block"
+                                    fill="clear"
+                                    onClick={() => setMedleyModalOpen(true)}
+                                    className="text-left"
+                                    style={INPUT_STYLES.default}
+                                  >
+                                    {medleySongIds.length === 0
+                                      ? 'Selecionar músicas'
+                                      : `${medleySongIds.length} ${medleySongIds.length === 1 ? 'música selecionada' : 'músicas selecionadas'}`}
+                                  </IonButton>
+                                </IonItem>
+
+                                <IonItem lines="none" className="rounded-xl bg-slate-900/60">
+                                  <IonSelect
+                                    label="Tom"
+                                    labelPlacement="stacked"
+                                    value={novaMusicaTom}
+                                    interface="popover"
+                                    placeholder="Selecione o tom"
+                                    onClick={(e) => e.stopPropagation()}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                    onIonChange={(e) => setNovaMusicaTom(String(e.detail.value ?? ''))}
+                                    style={INPUT_STYLES.selectSmall}
+                                  >
+                                    <IonSelectOption value="">Selecione o tom</IonSelectOption>
+                                    {['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B'].map((tom) => (
+                                      <IonSelectOption key={tom} value={tom}>
+                                        {tom}
+                                      </IonSelectOption>
+                                    ))}
+                                  </IonSelect>
+                                </IonItem>
+
+                                <div className="flex items-end">
+                                  <IonButton
+                                    type="button"
+                                    fill="clear"
+                                    size="small"
+                                    onClick={() => adicionarMusicaEscala(evento.id)}
+                                    disabled={!podeEditarMusicas || medleySongIds.length === 0}
+                                    aria-label="Adicionar medley"
+                                    className="m-0 h-7"
+                                  >
+                                    <IonIcon icon={addOutline} />
+                                  </IonButton>
+                                </div>
+                              </div>
+                            )}
                           </IonList>
+
+                          <MedleyPickerModal
+                            isOpen={medleyModalOpen}
+                            onClose={() => setMedleyModalOpen(false)}
+                            musicas={musicas}
+                            value={medleySongIds}
+                            onChange={setMedleySongIds}
+                          />
                         </>
                       )}
                     </div>
@@ -705,7 +846,7 @@ export default function AgendaSection(props: {
                 >
                   <IonIcon slot="icon-only" icon={chevronBackOutline} />
                 </IonButton>
-                <p className="text-[11px] text-slate-400">
+                <p className={`${LABEL_CLASSES.field} text-slate-400`}>
                   Página {paginaEventos} de {totalPaginasEventos}
                 </p>
                 <IonButton
@@ -722,8 +863,36 @@ export default function AgendaSection(props: {
               </div>
             )}
 
-          <p className="pt-1 text-[11px] text-slate-500">Total: {eventos.length} eventos</p>
+          <p className={`pt-1 ${LABEL_CLASSES.field} text-slate-500`}>Total: {eventos.length} eventos</p>
         </div>
+      )}
+
+      {/* Modal de seleção de membro */}
+      {eventoSelecionadoId && (
+        <MemberPickerModal
+          isOpen={memberPickerOpen}
+          onClose={() => setMemberPickerOpen(false)}
+          membros={membros.filter((membro) => {
+            const eventoAtual = eventos.find((e) => e.id === eventoSelecionadoId)
+            if (!eventoAtual) return false
+
+            const funcoes = membro.funcoes ?? []
+            const temPerfil = funcoes.includes('voz') || funcoes.includes('musico')
+            const isCurrentUser = membro.id === user.id
+
+            if (!temPerfil && !isCurrentUser) return false
+
+            const indispDoMembro = todasIndisponibilidades.filter((ind) => ind.usuario_id === membro.id)
+            const estaIndisponivel = indispDoMembro.some((ind) => {
+              const inicio = ind.data
+              const fim = ind.data_fim ?? ind.data
+              return eventoAtual.data >= inicio && eventoAtual.data <= fim
+            })
+            return !estaIndisponivel
+          })}
+          value={novoEscaladoUsuarioId}
+          onChange={setNovoEscaladoUsuarioId}
+        />
       )}
     </div>
   )

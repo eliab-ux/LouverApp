@@ -46,5 +46,9 @@ ion-datetime-button.datetime-button-small::part(native) {
   border-radius: 10px;
 }
 
-
-
+/* Padronização de labels dos IonSelect e IonInput */
+ion-select::part(label),
+ion-input::part(label) {
+  font-size: 11px;
+  font-weight: 600;
+}

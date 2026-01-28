@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { IonButton, IonInput, IonItem, IonLabel } from '@ionic/react'
 import { supabase } from '../lib/supabase'
 import { useInlineToast } from '../lib/inlineToastContext'
+import { maskPhoneBR, unmask } from '../utils/phoneMask'
 import type { AppUser } from '../types'
+import { Button, Input, Select } from '../components/ui'
+import { ThemeSelectRow } from '../components/ThemeSelectRow'
 
 type PerfilForm = {
   email: string
-  telefone: string
+  telefoneMasked: string  // Exibe com máscara (XX) XXXXX-XXXX
+  canal_notificacao: 'email' | 'whatsapp' | 'ambos'
 }
 
 export function MeuPerfil({ user }: { user: AppUser }) {
@@ -16,7 +19,8 @@ export function MeuPerfil({ user }: { user: AppUser }) {
   const [initialLoading, setInitialLoading] = useState(false)
   const [form, setForm] = useState<PerfilForm>({
     email: user.email,
-    telefone: user.telefone ?? '',
+    telefoneMasked: maskPhoneBR(user.telefone ?? ''),
+    canal_notificacao: user.canal_notificacao ?? 'email',
   })
 
   useEffect(() => {
@@ -26,7 +30,7 @@ export function MeuPerfil({ user }: { user: AppUser }) {
       try {
         const { data, error } = await supabase
           .from('usuarios')
-          .select('email, telefone')
+          .select('email, telefone, canal_notificacao')
           .eq('id', user.id)
           .maybeSingle()
 
@@ -37,9 +41,15 @@ export function MeuPerfil({ user }: { user: AppUser }) {
 
         if (!data || !mounted) return
 
+        // Debug: verificar valor do telefone vindo do banco
+        console.log('[MeuPerfil] Telefone do banco (SEM máscara):', data.telefone)
+        const masked = maskPhoneBR(String(data.telefone ?? ''))
+        console.log('[MeuPerfil] Telefone COM máscara:', masked)
+
         setForm({
           email: String(data.email ?? user.email),
-          telefone: String(data.telefone ?? ''),
+          telefoneMasked: masked,
+          canal_notificacao: (data.canal_notificacao as 'email' | 'whatsapp' | 'ambos') ?? 'email',
         })
       } catch (e) {
         console.error(e)
@@ -67,7 +77,10 @@ export function MeuPerfil({ user }: { user: AppUser }) {
     setLoading(true)
     try {
       const nextEmail = form.email.trim()
-      const nextTelefone = form.telefone.trim() || null
+      // Remove máscara do telefone antes de salvar (salva apenas dígitos)
+      const nextTelefone = unmask(form.telefoneMasked).trim() || null
+
+      console.log('[MeuPerfil] Salvando telefone SEM máscara:', nextTelefone)
 
       if (nextEmail !== user.email) {
         const { error: authErr } = await supabase.auth.updateUser({ email: nextEmail })
@@ -79,7 +92,7 @@ export function MeuPerfil({ user }: { user: AppUser }) {
 
       const { error: userErr } = await supabase
         .from('usuarios')
-        .update({ email: nextEmail, telefone: nextTelefone })
+        .update({ email: nextEmail, telefone: nextTelefone, canal_notificacao: form.canal_notificacao })
         .eq('id', user.id)
 
       if (userErr) {
@@ -105,41 +118,72 @@ export function MeuPerfil({ user }: { user: AppUser }) {
   }
 
   return (
-    <div className="max-w-xl mx-auto space-y-4">
+    <div className="max-w-xl mx-auto p-4 space-y-6">
+      {/* Título da página */}
       <div>
-        <h2 className="text-base font-semibold">Meu Perfil</h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400">Atualize seus dados pessoais.</p>
+        <h1 className="text-xl md:text-2xl font-bold text-neutral-900 dark:text-neutral-100">Meu Perfil</h1>
+        <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400 mt-1">Atualize seus dados pessoais.</p>
       </div>
 
-      <div className="rounded-2xl bg-white/80 dark:bg-[#111B2E] p-4 space-y-3">
-        <IonItem lines="none" className="rounded-xl">
-          <IonLabel position="stacked">E-mail</IonLabel>
-          <IonInput
-            value={form.email}
-            inputMode="email"
-            autocomplete="email"
-            onIonChange={(e) => setForm((prev) => ({ ...prev, email: String(e.detail.value ?? '') }))}
-          />
-        </IonItem>
+      {/* Formulário */}
+      <div className="rounded-xl bg-white dark:bg-neutral-800 p-4 space-y-4">
+        <Input
+          label="E-mail"
+          type="email"
+          value={form.email}
+          onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+          placeholder="seu@email.com"
+          disabled={loading || initialLoading}
+        />
 
-        <IonItem lines="none" className="rounded-xl">
-          <IonLabel position="stacked">Telefone</IonLabel>
-          <IonInput
-            value={form.telefone}
-            inputMode="tel"
-            autocomplete="tel"
-            onIonChange={(e) => setForm((prev) => ({ ...prev, telefone: String(e.detail.value ?? '') }))}
-          />
-        </IonItem>
+        <Input
+          label="Telefone"
+          type="tel"
+          value={form.telefoneMasked}
+          onChange={(e) => {
+            const masked = maskPhoneBR(e.target.value)
+            setForm((prev) => ({ ...prev, telefoneMasked: masked }))
+          }}
+          placeholder="(11) 99999-9999"
+          disabled={loading || initialLoading}
+        />
 
-        <IonButton
-          expand="block"
-          size="small"
+        <Select
+          label="Canal de Notificação Preferido"
+          value={form.canal_notificacao}
+          onChange={(e) =>
+            setForm((prev) => ({ ...prev, canal_notificacao: e.target.value as 'email' | 'whatsapp' | 'ambos' }))
+          }
+          disabled={loading || initialLoading}
+        >
+          <option value="email">📧 Email</option>
+          <option value="whatsapp">💬 WhatsApp</option>
+          <option value="ambos">📧💬 Ambos (Email + WhatsApp)</option>
+        </Select>
+
+        {form.canal_notificacao !== 'email' && !form.telefoneMasked.trim() && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-warning-50 dark:bg-warning-900/20">
+            <span className="text-warning-600 dark:text-warning-400 text-sm">⚠️</span>
+            <p className="text-xs md:text-sm text-warning-700 dark:text-warning-300">
+              Para receber notificações via WhatsApp, adicione seu telefone acima.
+            </p>
+          </div>
+        )}
+
+        {/* Seletor de Tema */}
+        <div className="pt-2">
+          <ThemeSelectRow />
+        </div>
+
+        <Button
+          variant="primary"
+          fullWidth
           disabled={!canSave}
+          loading={loading}
           onClick={() => void salvar()}
         >
           {loading ? 'Salvando...' : 'Salvar'}
-        </IonButton>
+        </Button>
       </div>
     </div>
   )

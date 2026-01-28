@@ -1,4 +1,19 @@
 import { useState } from 'react'
+import {
+  IonButton,
+  IonCard,
+  IonCardContent,
+  IonCardHeader,
+  IonCardTitle,
+  IonIcon,
+  IonItem,
+  IonLabel,
+  IonList,
+  IonNote,
+  IonText,
+  useIonRouter,
+} from '@ionic/react'
+import { downloadOutline, cloudUploadOutline, checkmarkCircleOutline } from 'ionicons/icons'
 import { supabase } from '../../lib/supabase'
 import type { AppUser, Categoria, MomentoCulto, Estilo } from '../../types'
 
@@ -21,6 +36,7 @@ export function ImportarCSVPanel({
   onMomentosChange,
   onEstilosChange,
 }: ImportarCSVPanelProps) {
+  const router = useIonRouter()
   const [csvData, setCsvData] = useState<string[][]>([])
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])
   const [importando, setImportando] = useState(false)
@@ -46,7 +62,6 @@ export function ImportarCSVPanel({
   const parseCSV = (text: string): string[][] => {
     const lines = text.split(/\r?\n/).filter((line) => line.trim())
     return lines.map((line) => {
-      // Suporta tanto ; quanto , como separador (detecta automaticamente)
       const separator = line.includes(';') ? ';' : ','
       return line.split(separator).map((cell) => cell.trim().replace(/^["']|["']$/g, ''))
     })
@@ -61,10 +76,51 @@ export function ImportarCSVPanel({
     setArquivoNome(file.name)
 
     try {
-      // Tenta ler como UTF-8 primeiro
+      const { data: entRow, error: entError } = await supabase
+        .from('igreja_entitlement')
+        .select('plano, limite_musicas, is_blocked')
+        .eq('igreja_id', user.igrejaId)
+        .maybeSingle()
+
+      if (entError) {
+        setImportError('Erro ao verificar o plano da igreja.')
+        return
+      }
+
+      if (entRow?.is_blocked) {
+        setImportError('Igreja suspensa. Importacao bloqueada.')
+        return
+      }
+
+      const limite = entRow?.limite_musicas ?? null
+      if (entRow?.plano === 'free' && typeof limite === 'number') {
+        const { count: totalMusicas, error: countError } = await supabase
+          .from('musicas')
+          .select('*', { count: 'exact', head: true })
+          .eq('igreja_id', user.igrejaId)
+
+        if (countError) {
+          setImportError('Erro ao verificar limite de musicas.')
+          return
+        }
+
+        const totalAtual = totalMusicas ?? 0
+        const restante = limite - totalAtual
+        if (restante <= 0) {
+          setImportError(`Limite do plano Free: ${limite} musicas. Nenhuma vaga disponivel.`)
+          window.setTimeout(() => router.push('/app/assinatura', 'forward', 'push'), 600)
+          return
+        }
+
+        if (csvData.length > restante) {
+          setImportError(`Limite do plano Free: ${limite} musicas. Restante para importar: ${restante}.`)
+          window.setTimeout(() => router.push('/app/assinatura', 'forward', 'push'), 600)
+          return
+        }
+      }
+
       let text = await file.text()
 
-      // Se detectar caracteres estranhos, tenta com encoding diferente
       if (text.includes('�') || text.includes('Ã')) {
         const buffer = await file.arrayBuffer()
         const decoder = new TextDecoder('iso-8859-1')
@@ -100,7 +156,6 @@ export function ImportarCSVPanel({
     setImportSuccess(null)
 
     try {
-      // Mapeia índices das colunas
       const headerLower = csvHeaders.map((h) => h.toLowerCase().trim())
       const nomeIdx = headerLower.findIndex((h) => h === 'nome' || h === 'título' || h === 'titulo')
       const tonsIdx = headerLower.findIndex((h) => h === 'tons' || h === 'tom' || h === 'tonalidade')
@@ -116,12 +171,10 @@ export function ImportarCSVPanel({
         return
       }
 
-      // Cache local para categorias/momentos/estilos criados durante a importação
       const categoriasCache = new Map<string, string>()
       const momentosCache = new Map<string, string>()
       const estilosCache = new Map<string, string>()
 
-      // Preenche cache com dados existentes
       categorias.forEach((c) => categoriasCache.set(c.nome.toLowerCase(), c.id))
       momentos.forEach((m) => momentosCache.set(m.nome.toLowerCase(), m.id))
       estilos.forEach((e) => estilosCache.set(e.nome.toLowerCase(), e.id))
@@ -134,13 +187,9 @@ export function ImportarCSVPanel({
         if (!nome) continue
 
         try {
-          // Processa tons (separados por vírgula)
           const tonsStr = tonsIdx >= 0 ? row[tonsIdx]?.trim() : ''
-          const tons = tonsStr
-            ? tonsStr.split(',').map((t) => t.trim().toUpperCase()).filter(Boolean)
-            : null
+          const tons = tonsStr ? tonsStr.split(',').map((t) => t.trim().toUpperCase()).filter(Boolean) : null
 
-          // Processa categoria (cria se não existir)
           let categoriaId: string | null = null
           const categoriaNome = categoriaIdx >= 0 ? row[categoriaIdx]?.trim() : ''
           if (categoriaNome) {
@@ -160,7 +209,6 @@ export function ImportarCSVPanel({
             }
           }
 
-          // Processa momento (cria se não existir)
           let momentoId: string | null = null
           const momentoNome = momentoIdx >= 0 ? row[momentoIdx]?.trim() : ''
           if (momentoNome) {
@@ -180,7 +228,6 @@ export function ImportarCSVPanel({
             }
           }
 
-          // Processa estilo (cria se não existir)
           let estiloId: string | null = null
           const estiloNome = estiloIdx >= 0 ? row[estiloIdx]?.trim() : ''
           if (estiloNome) {
@@ -200,18 +247,14 @@ export function ImportarCSVPanel({
             }
           }
 
-          // Processa BPM
           const bpmStr = bpmIdx >= 0 ? row[bpmIdx]?.trim() : ''
           const bpm = bpmStr ? parseInt(bpmStr, 10) : null
 
-          // Processa possui_vs
           const vsStr = vsIdx >= 0 ? row[vsIdx]?.trim().toLowerCase() : ''
           const possuiVs = vsStr === 'sim' || vsStr === 's' || vsStr === 'true' || vsStr === '1'
 
-          // Processa link
           const link = linkIdx >= 0 ? row[linkIdx]?.trim() : null
 
-          // Insere a música
           const { error: insertError } = await supabase.from('musicas').insert({
             nome,
             tons: tons && tons.length > 0 ? tons : null,
@@ -236,20 +279,16 @@ export function ImportarCSVPanel({
         }
       }
 
-      // Atualiza listas se criou novos itens
       onCategoriasChange()
       onMomentosChange()
       onEstilosChange()
 
       if (importadas > 0) {
-        setImportSuccess(
-          `${importadas} música(s) importada(s) com sucesso!${erros > 0 ? ` (${erros} erro(s))` : ''}`
-        )
+        setImportSuccess(`${importadas} música(s) importada(s) com sucesso!${erros > 0 ? ` (${erros} erro(s))` : ''}`)
       } else {
         setImportError(`Nenhuma música foi importada. ${erros} erro(s) encontrado(s).`)
       }
 
-      // Limpa o formulário
       setCsvData([])
       setCsvHeaders([])
       const fileInput = document.getElementById('csvFileInput') as HTMLInputElement
@@ -263,131 +302,162 @@ export function ImportarCSVPanel({
   }
 
   return (
-    <section className="rounded-2xl bg-slate-900/60 p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-100">Importar CSV</h2>
-          <p className="text-[11px] text-slate-400">Importe músicas em lote e crie categorias/momentos/estilos automaticamente</p>
-        </div>
-        <button
-          type="button"
-          onClick={gerarTemplateCSV}
-          className="inline-flex items-center justify-center rounded-xl border border-emerald-600/70 bg-emerald-500/10 px-3 py-2 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/15"
-        >
-          ⬇️ Baixar template
-        </button>
-      </div>
+    <div className="space-y-4">
+      <IonCard className="m-0">
+        <IonCardHeader>
+          <IonCardTitle className="text-base">Importar CSV</IonCardTitle>
+        </IonCardHeader>
+        <IonCardContent>
+          <IonText color="medium">
+            <p className="text-sm mb-3">Importe músicas em lote e crie categorias/momentos/estilos automaticamente</p>
+          </IonText>
 
-      <div className="space-y-4">
-        {/* Instruções */}
-        <div className="rounded-2xl bg-slate-950/30 p-4 shadow-sm ring-1 ring-slate-800/60">
-          <h3 className="text-xs font-semibold text-slate-200 mb-2">Como funciona</h3>
-          <ol className="text-xs text-slate-300 space-y-1 list-decimal list-inside">
-            <li>
-              O arquivo deve ser CSV com separador <code className="bg-slate-900 px-1 rounded">;</code>
-            </li>
-            <li>A primeira linha deve conter os cabeçalhos das colunas</li>
-            <li>
-              Coluna obrigatória: <span className="font-semibold text-slate-100">nome</span>
-            </li>
-            <li>Colunas opcionais: tons, categoria, momento, estilo, bpm, possui_vs, link</li>
-            <li>
-              Tons separados por vírgula (ex: <span className="font-semibold">C,G,D</span>)
-            </li>
-            <li>
-              Categorias, momentos e estilos serão <span className="font-semibold">criados automaticamente</span>
-            </li>
-            <li>
-              Para <span className="font-semibold">possui_vs</span>, use: sim, s, true ou 1
-            </li>
-          </ol>
-        </div>
+          {/* Botão Baixar Template */}
+          <div className="mb-4">
+            <IonButton fill="outline" size="small" onClick={gerarTemplateCSV}>
+              <IonIcon slot="start" icon={downloadOutline} />
+              Baixar Template
+            </IonButton>
+          </div>
 
-        {/* Upload de arquivo */}
-        <div className="rounded-2xl bg-slate-950/30 p-4 shadow-sm ring-1 ring-slate-800/60">
-          <label className="block text-xs font-medium text-slate-200 mb-2" htmlFor="csvFileInput">
-            Selecione o arquivo CSV
-          </label>
-          <input
-            id="csvFileInput"
-            type="file"
-            accept=".csv,.txt"
-            onChange={handleFileChange}
-            className="w-full text-xs text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-500 file:text-slate-900 hover:file:bg-emerald-400 file:cursor-pointer"
-          />
-          <div className="mt-2 text-[11px] text-slate-400">
-            {arquivoNome ? (
-              <span>
-                {csvData.length > 0 ? '✅' : '📄'} {arquivoNome}
-              </span>
-            ) : (
-              <span>Nenhum arquivo selecionado.</span>
+          {/* Instruções - Como funciona */}
+          <div className="mb-4">
+            <IonText color="dark">
+              <p className="text-sm font-semibold mb-2">Como funciona</p>
+            </IonText>
+            <IonList lines="none" className="py-0">
+              <IonItem className="text-xs">
+                <IonLabel className="ion-text-wrap">
+                  <IonText color="medium">
+                    <p>1. O arquivo deve ser CSV com separador <code className="bg-gray-200 dark:bg-gray-700 px-1 rounded">;</code></p>
+                  </IonText>
+                </IonLabel>
+              </IonItem>
+              <IonItem className="text-xs">
+                <IonLabel className="ion-text-wrap">
+                  <IonText color="medium">
+                    <p>2. A primeira linha deve conter os cabeçalhos das colunas</p>
+                  </IonText>
+                </IonLabel>
+              </IonItem>
+              <IonItem className="text-xs">
+                <IonLabel className="ion-text-wrap">
+                  <IonText color="medium">
+                    <p>3. Coluna obrigatória: <strong>nome</strong></p>
+                  </IonText>
+                </IonLabel>
+              </IonItem>
+              <IonItem className="text-xs">
+                <IonLabel className="ion-text-wrap">
+                  <IonText color="medium">
+                    <p>4. Colunas opcionais: tons, categoria, momento, estilo, bpm, possui_vs, link</p>
+                  </IonText>
+                </IonLabel>
+              </IonItem>
+              <IonItem className="text-xs">
+                <IonLabel className="ion-text-wrap">
+                  <IonText color="medium">
+                    <p>5. Tons separados por vírgula (ex: <strong>C,G,D</strong>)</p>
+                  </IonText>
+                </IonLabel>
+              </IonItem>
+              <IonItem className="text-xs">
+                <IonLabel className="ion-text-wrap">
+                  <IonText color="medium">
+                    <p>6. Categorias, momentos e estilos serão <strong>criados automaticamente</strong></p>
+                  </IonText>
+                </IonLabel>
+              </IonItem>
+              <IonItem className="text-xs">
+                <IonLabel className="ion-text-wrap">
+                  <IonText color="medium">
+                    <p>7. Para <strong>possui_vs</strong>, use: sim, s, true ou 1</p>
+                  </IonText>
+                </IonLabel>
+              </IonItem>
+            </IonList>
+          </div>
+
+          {/* Upload de arquivo */}
+          <div className="mb-4">
+            <IonLabel className="text-sm font-medium mb-2 block">Selecione o arquivo CSV</IonLabel>
+            <input
+              id="csvFileInput"
+              type="file"
+              accept=".csv,.txt"
+              onChange={handleFileChange}
+              className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900 dark:file:text-blue-300 dark:hover:file:bg-blue-800"
+            />
+            {arquivoNome && (
+              <IonNote className="block mt-2">
+                {csvData.length > 0 ? <IonIcon icon={checkmarkCircleOutline} color="success" /> : '📄'} {arquivoNome}
+              </IonNote>
             )}
           </div>
-        </div>
 
-        {/* Preview dos dados */}
-        {csvData.length > 0 && (
-          <div className="rounded-2xl bg-slate-950/30 p-4 shadow-sm ring-1 ring-slate-800/60">
-            <h3 className="text-xs font-semibold text-slate-300 mb-2">
-              Preview ({csvData.length} linha(s) para importar)
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[10px] text-slate-300">
-                <thead>
-                  <tr className="border-b border-slate-700">
-                    {csvHeaders.map((header, i) => (
-                      <th key={i} className="px-2 py-1 text-left font-semibold text-emerald-400">
-                        {header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {csvData.slice(0, 5).map((row, rowIdx) => (
-                    <tr key={rowIdx} className="border-b border-slate-700/50">
-                      {row.map((cell, cellIdx) => (
-                        <td key={cellIdx} className="px-2 py-1 truncate max-w-[150px]">
-                          {cell || '-'}
-                        </td>
+          {/* Preview dos dados */}
+          {csvData.length > 0 && (
+            <IonCard>
+              <IonCardHeader>
+                <IonCardTitle className="text-sm">Preview ({csvData.length} linha(s) para importar)</IonCardTitle>
+              </IonCardHeader>
+              <IonCardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b">
+                        {csvHeaders.map((header, i) => (
+                          <th key={i} className="px-2 py-2 text-left font-semibold">
+                            {header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {csvData.slice(0, 5).map((row, rowIdx) => (
+                        <tr key={rowIdx} className="border-b">
+                          {row.map((cell, cellIdx) => (
+                            <td key={cellIdx} className="px-2 py-2 truncate max-w-[150px]">
+                              {cell || '-'}
+                            </td>
+                          ))}
+                        </tr>
                       ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {csvData.length > 5 && (
-                <p className="text-[10px] text-slate-500 mt-2">
-                  ... e mais {csvData.length - 5} linha(s)
-                </p>
-              )}
-            </div>
-          </div>
-        )}
+                    </tbody>
+                  </table>
+                  {csvData.length > 5 && (
+                    <IonNote className="block mt-2">... e mais {csvData.length - 5} linha(s)</IonNote>
+                  )}
+                </div>
+              </IonCardContent>
+            </IonCard>
+          )}
 
-        {/* Mensagens de erro/sucesso */}
-        {importError && (
-          <p className="text-xs text-red-300 bg-red-950/40 border border-red-500/40 rounded-md px-3 py-2">
-            {importError}
-          </p>
-        )}
-        {importSuccess && (
-          <p className="text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-500/40 rounded-md px-3 py-2">
-            {importSuccess}
-          </p>
-        )}
+          {/* Mensagens */}
+          {importError && (
+            <IonText color="danger">
+              <p className="text-sm bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 mb-4">
+                {importError}
+              </p>
+            </IonText>
+          )}
+          {importSuccess && (
+            <IonText color="success">
+              <p className="text-sm bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2 mb-4">
+                {importSuccess}
+              </p>
+            </IonText>
+          )}
 
-        {/* Botão de importar */}
-        {csvData.length > 0 && (
-          <button
-            type="button"
-            onClick={importarMusicas}
-            disabled={importando}
-            className="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {importando ? 'Importando...' : `Importar ${csvData.length} música(s)`}
-          </button>
-        )}
-      </div>
-    </section>
+          {/* Botão de importar */}
+          {csvData.length > 0 && (
+            <IonButton expand="block" onClick={importarMusicas} disabled={importando}>
+              <IonIcon slot="start" icon={cloudUploadOutline} />
+              {importando ? 'Importando...' : `Importar ${csvData.length} música(s)`}
+            </IonButton>
+          )}
+        </IonCardContent>
+      </IonCard>
+    </div>
   )
 }

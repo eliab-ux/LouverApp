@@ -15,6 +15,7 @@ import '@ionic/react/css/display.css'
 
 import '@ionic/react/css/palettes/dark.class.css'
 import './theme/variables.css'
+import './styles/design-tokens.css'
 import './index.css'
 import App from './App.tsx'
 import { registerSW } from 'virtual:pwa-register'

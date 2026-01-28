@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  evolution-api:
+    image: atendai/evolution-api:latest
+    container_name: evolution-api
+    restart: unless-stopped
+    ports:
+      - "80:8080"
+    environment:
+      # URL pública do servidor (ALTERAR para o IP ou domínio da sua VPS)
+      SERVER_URL: http://evolution.techbs.com.br
+
+      # Chave de autenticação da API (ALTERAR para uma chave segura)
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+
+      # Database PostgreSQL (usar o PostgreSQL da VPS)
+      DATABASE_ENABLED: true
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=evolution
+      DATABASE_SAVE_DATA_INSTANCE: true
+      DATABASE_SAVE_DATA_NEW_MESSAGE: true
+      DATABASE_SAVE_MESSAGE_UPDATE: true
+      DATABASE_SAVE_DATA_CONTACTS: true
+      DATABASE_SAVE_DATA_CHATS: true
+
+      # Redis (cache - opcional mas recomendado para produção)
+      CACHE_REDIS_ENABLED: true
+      CACHE_REDIS_URI: redis://redis:6379
+      CACHE_REDIS_PREFIX_KEY: evolution
+      CACHE_LOCAL_ENABLED: false
+
+      # Configurações do WhatsApp
+      QRCODE_COLOR: "#198754"
+      TYPEBOT_ENABLED: false
+
+      # Logs
+      LOG_LEVEL: INFO
+      LOG_COLOR: true
+      LOG_BAILEYS: error
+
+      # Webhook global (opcional)
+      WEBHOOK_GLOBAL_ENABLED: true
+      WEBHOOK_GLOBAL_URL: ${WEBHOOK_GLOBAL_URL}
+
+      # Configurações de instância
+      DEL_INSTANCE: false
+      DEL_TEMP_INSTANCES: true
+
+    volumes:
+      - evolution_instances:/evolution/instances
+      - evolution_store:/evolution/store
+
+    networks:
+      - evolution-network
+
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: evolution-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - evolution-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  evolution_instances:
+    driver: local
+  evolution_store:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  evolution-network:
+    driver: bridge

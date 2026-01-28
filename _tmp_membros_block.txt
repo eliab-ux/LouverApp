@@ -1,0 +1,33 @@
+<IonCardContent className="pt-0">
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`${TEXT_CLASSES.badge} ${
+                                    membro.papel === 'admin'
+                                      ? 'bg-red-500/20 text-red-300'
+                                      : membro.papel === 'lider'
+                                        ? 'bg-amber-500/20 text-amber-300'
+                                        : 'bg-slate-500/20 text-slate-300'
+                                  }`}
+                                >
+                                  {membro.papel === 'admin' ? 'Admin' : membro.papel === 'lider' ? 'Líder' : 'Membro'}
+                                </span>
+                                {membro.funcoes && membro.funcoes.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {membro.funcoes.map((f) => (
+                                      <span
+                                        key={f}
+                                        className={`${TEXT_CLASSES.badge} inline-flex items-center gap-1 bg-slate-800/70 text-slate-200`}
+                                      >
+                                        {f === 'voz' ? '🎤' : f === 'musico' ? '🎸' : '•'}
+                                        <span>{f === 'voz' ? 'Voz' : f === 'musico' ? 'Músico' : f}</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="mt-2 flex justify-end text-[10px] text-slate-400">
+                                {membro.status === 'ativo' && <span>Ativo</span>}
+                                {membro.status === 'aguardando_verificacao' && <span>Aguardando verificacao</span>}
+                                {membro.status === 'inativo' && <span>Inativo</span>}
+                              </div>
+                            </IonCardContent>

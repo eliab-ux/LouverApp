@@ -171,11 +171,26 @@ export function Login({ onAuthSuccess }: AuthScreenProps) {
 
         // Se está criando nova igreja
         if (registerType === 'new_church' && signUpData.user) {
+          // Buscar configuracao padrao do Evolution API
+          const { data: configData } = await supabase
+            .from('app_config')
+            .select('default_whatsapp_instance_id, default_whatsapp_api_key, default_whatsapp_enabled')
+            .eq('id', 1)
+            .maybeSingle()
+
+          const defaultWhatsappEnabled = Boolean(configData?.default_whatsapp_enabled)
+
           // Criar a igreja (o trigger vai popular os templates automaticamente)
           const cnpjLimpo = cnpjIgreja.replace(/[^\d]/g, '')
           const { data: igrejaData, error: igrejaError } = await supabase
             .from('igrejas')
-            .insert({ nome: nomeIgreja.trim(), cnpj: cnpjLimpo })
+            .insert({
+              nome: nomeIgreja.trim(),
+              cnpj: cnpjLimpo,
+              whatsapp_habilitado: defaultWhatsappEnabled,
+              whatsapp_instance_id: configData?.default_whatsapp_instance_id ?? null,
+              whatsapp_api_key: configData?.default_whatsapp_api_key ?? null,
+            })
             .select()
             .single()
 

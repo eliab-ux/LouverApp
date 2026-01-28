@@ -5,6 +5,7 @@ export default function useConfirmDialog() {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [confirmDialogTitle, setConfirmDialogTitle] = useState('')
   const [confirmDialogMessage, setConfirmDialogMessage] = useState('')
+  const [confirmDialogActionLabel, setConfirmDialogActionLabel] = useState('')
   const [confirmDialogOnConfirm, setConfirmDialogOnConfirm] = useState<null | (() => Promise<void>)>(null)
 
   const abrirConfirmacao = (opts: {
@@ -15,6 +16,7 @@ export default function useConfirmDialog() {
   }) => {
     setConfirmDialogTitle(opts.title)
     setConfirmDialogMessage(opts.message)
+    setConfirmDialogActionLabel(opts.actionLabel ?? 'Excluir')
     setConfirmDialogOnConfirm(() => opts.onConfirm)
     setConfirmDialogOpen(true)
   }
@@ -34,7 +36,7 @@ export default function useConfirmDialog() {
             role: 'cancel',
           },
           {
-            text: 'Excluir',
+            text: confirmDialogActionLabel,
             role: 'destructive',
             handler: () => {
               void (async () => {
@@ -49,7 +51,7 @@ export default function useConfirmDialog() {
         ]}
       />
     )
-  }, [confirmDialogMessage, confirmDialogOnConfirm, confirmDialogOpen, confirmDialogTitle])
+  }, [confirmDialogMessage, confirmDialogActionLabel, confirmDialogOnConfirm, confirmDialogOpen, confirmDialogTitle])
 
   return {
     abrirConfirmacao,

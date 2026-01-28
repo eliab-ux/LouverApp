@@ -19,8 +19,12 @@ import {
 } from 'ionicons/icons'
 import { supabase } from '../../lib/supabase'
 import type { AppUser, Estilo } from '../../types'
+import {
+  LABEL_CLASSES,
+  INPUT_STYLES,
+} from '../../styles/form-styles'
 
-interface EstilosPanelProps {
+interface EstilosPanelProps{
   user: AppUser
   estilos: Estilo[]
   onEstilosChange: () => void
@@ -202,7 +206,7 @@ export function EstilosPanel({ user, estilos, onEstilosChange }: EstilosPanelPro
           <p className="text-sm text-slate-300">Nenhum estilo cadastrado ainda.</p>
         ) : (
           <>
-            <div className="text-[11px] text-slate-400 mb-3">
+            <div className={`${LABEL_CLASSES.field} text-slate-400 mb-3`}>
               Total: {estilos.length} | Página {paginaEstilo} de {Math.ceil(estilos.length / itensPorPagina)}
             </div>
             <ul className="space-y-2 list-none text-sm text-slate-200">
@@ -219,7 +223,7 @@ export function EstilosPanel({ user, estilos, onEstilosChange }: EstilosPanelPro
                           value={estiloEditandoNome}
                           onIonInput={(e) => setEstiloEditandoNome(String(e.detail.value ?? ''))}
                           className="flex-1"
-                          style={{ fontSize: '10.5px' }}
+                          style={INPUT_STYLES.default}
                         />
                         <IonButton
                           type="button"
@@ -245,7 +249,7 @@ export function EstilosPanel({ user, estilos, onEstilosChange }: EstilosPanelPro
                       </form>
                     ) : (
                       <>
-                        <span className="flex-1 truncate text-[15px] font-medium text-slate-100">{est.nome}</span>
+                        <span className={`flex-1 truncate ${LABEL_CLASSES.item}`}>{est.nome}</span>
                         <div className="flex items-center gap-2">
                           <IonButton
                             type="button"
@@ -316,7 +320,7 @@ export function EstilosPanel({ user, estilos, onEstilosChange }: EstilosPanelPro
                 >
                   <IonIcon slot="icon-only" icon={chevronBackOutline} />
                 </IonButton>
-                <p className="text-[11px] text-slate-400">
+                <p className={`${LABEL_CLASSES.field} text-slate-400`}>
                   Página {paginaEstilo} de {Math.ceil(estilos.length / itensPorPagina)}
                 </p>
                 <IonButton
@@ -351,14 +355,14 @@ export function EstilosPanel({ user, estilos, onEstilosChange }: EstilosPanelPro
             <div slot="content" className="p-4">
               <form onSubmit={handleCreateEstilo} className="space-y-3">
                 <IonItem lines="none" className="rounded-xl">
-                  <IonLabel position="stacked" className="text-[11px] font-semibold" style={{ fontWeight: 700 }}>
+                  <IonLabel position="stacked" className={LABEL_CLASSES.field}>
                     Nome do estilo
                   </IonLabel>
                   <IonInput
                     value={novoEstilo}
                     onIonInput={(e) => setNovoEstilo(String(e.detail.value ?? ''))}
                     placeholder="Ex: Contemplação, Proclamação..."
-                    style={{ fontSize: '10.5px' }}
+                    style={INPUT_STYLES.default}
                     required
                   />
                 </IonItem>

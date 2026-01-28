@@ -10,6 +10,7 @@ import { Login } from './pages/Login'
 import { ResetPassword } from './pages/ResetPassword'
 import { AcceptInvite } from './pages/AcceptInvite'
 import { Dashboard } from './pages/Dashboard'
+import { SuperAdminDashboard } from './pages/SuperAdminDashboard'
 
 function AppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -58,7 +59,7 @@ function App() {
 
       const { data: usuario, error: usuarioError } = await supabase
         .from('usuarios')
-        .select('id, nome, email, telefone, papel, igreja_id')
+        .select('id, nome, email, telefone, canal_notificacao, papel, igreja_id')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -76,9 +77,32 @@ function App() {
         return
       }
 
+      if (usuario.papel === 'super_admin') {
+        setAppUser({
+          id: usuario.id,
+          email: usuario.email,
+          nome: usuario.nome,
+          telefone: usuario.telefone ?? null,
+          canal_notificacao: (usuario as unknown as { canal_notificacao?: 'email' | 'whatsapp' | 'ambos' }).canal_notificacao ?? 'email',
+          papel: usuario.papel,
+          igrejaId: '',
+          igrejaNome: null,
+          igrejaCnpj: null,
+          igrejaWhatsAppHabilitado: false,
+          igrejaWhatsAppInstanceId: null,
+        })
+        return
+      }
+
+      try {
+        await supabase.rpc('mark_usuario_ativo')
+      } catch (e) {
+        console.warn('Nao foi possivel marcar usuario como ativo:', e)
+      }
+
       const { data: igreja, error: igrejaError } = await supabase
         .from('igrejas')
-        .select('id, nome, cnpj')
+        .select('id, nome, cnpj, whatsapp_habilitado, whatsapp_instance_id')
         .eq('id', usuario.igreja_id)
         .maybeSingle()
 
@@ -93,10 +117,13 @@ function App() {
         email: usuario.email,
         nome: usuario.nome,
         telefone: usuario.telefone ?? null,
+        canal_notificacao: (usuario as unknown as { canal_notificacao?: 'email' | 'whatsapp' | 'ambos' }).canal_notificacao ?? 'email',
         papel: usuario.papel,
         igrejaId: usuario.igreja_id,
         igrejaNome: igreja?.nome ?? null,
         igrejaCnpj: ((igreja as unknown as { cnpj?: string | null } | null)?.cnpj ?? null) || null,
+        igrejaWhatsAppHabilitado: (igreja as unknown as { whatsapp_habilitado?: boolean })?.whatsapp_habilitado ?? false,
+        igrejaWhatsAppInstanceId: (igreja as unknown as { whatsapp_instance_id?: string | null })?.whatsapp_instance_id ?? null,
       })
     } catch (e) {
       console.error(e)
@@ -169,8 +196,31 @@ function App() {
         <IonReactRouter>
           <AppShell>
             <Switch>
-              <Route path="/app" render={() => <Dashboard user={appUser} />} />
-              <Redirect exact from="/" to="/app/inicio" />
+              <Route
+                path="/admin"
+                render={() =>
+                  appUser.papel === 'super_admin'
+                    ? <SuperAdminDashboard user={appUser} />
+                    : <Redirect to="/app/inicio" />
+                }
+              />
+              <Route
+                path="/app"
+                render={() =>
+                  appUser.papel === 'super_admin'
+                    ? <Redirect to="/admin" />
+                    : <Dashboard user={appUser} />
+                }
+              />
+              <Route
+                exact
+                path="/"
+                render={() =>
+                  appUser.papel === 'super_admin'
+                    ? <Redirect to="/admin" />
+                    : <Redirect to="/app/inicio" />
+                }
+              />
             </Switch>
           </AppShell>
         </IonReactRouter>

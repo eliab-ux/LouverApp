@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { IonButton, IonInput, IonItem, IonLabel } from '@ionic/react'
+import { IonToggle } from '@ionic/react'
 import { supabase } from '../lib/supabase'
 import { useInlineToast } from '../lib/inlineToastContext'
 import type { AppUser } from '../types'
+import { Button, Input } from '../components/ui'
 
 type IgrejaForm = {
   nome: string
   cnpj: string
+  whatsapp_habilitado: boolean
+  whatsapp_instance_id: string
+  whatsapp_api_key: string
 }
 
 const onlyDigits = (value: string) => value.replace(/[^\d]/g, '')
@@ -19,6 +23,9 @@ export function DadosIgreja({ user }: { user: AppUser }) {
   const [form, setForm] = useState<IgrejaForm>({
     nome: user.igrejaNome ?? '',
     cnpj: '',
+    whatsapp_habilitado: user.igrejaWhatsAppHabilitado ?? false,
+    whatsapp_instance_id: user.igrejaWhatsAppInstanceId ?? '',
+    whatsapp_api_key: '',
   })
 
   useEffect(() => {
@@ -28,7 +35,7 @@ export function DadosIgreja({ user }: { user: AppUser }) {
       try {
         const { data, error } = await supabase
           .from('igrejas')
-          .select('nome, cnpj')
+          .select('nome, cnpj, whatsapp_habilitado, whatsapp_instance_id')
           .eq('id', user.igrejaId)
           .maybeSingle()
 
@@ -42,6 +49,9 @@ export function DadosIgreja({ user }: { user: AppUser }) {
         setForm({
           nome: String(data.nome ?? ''),
           cnpj: String(data.cnpj ?? ''),
+          whatsapp_habilitado: (data as unknown as { whatsapp_habilitado?: boolean }).whatsapp_habilitado ?? false,
+          whatsapp_instance_id: String((data as unknown as { whatsapp_instance_id?: string }).whatsapp_instance_id ?? ''),
+          whatsapp_api_key: '', // Nunca carregar a API key do banco por segurança
         })
       } catch (e) {
         console.error(e)
@@ -73,9 +83,22 @@ export function DadosIgreja({ user }: { user: AppUser }) {
       const nome = form.nome.trim()
       const cnpj = onlyDigits(form.cnpj)
 
+      // Preparar update baseado nos campos preenchidos
+      const updateData: Record<string, unknown> = {
+        nome,
+        cnpj,
+        whatsapp_habilitado: form.whatsapp_habilitado,
+        whatsapp_instance_id: form.whatsapp_habilitado ? form.whatsapp_instance_id.trim() : null,
+      }
+
+      // Só atualizar API key se foi fornecida
+      if (form.whatsapp_api_key.trim()) {
+        updateData.whatsapp_api_key = form.whatsapp_api_key.trim()
+      }
+
       const { error } = await supabase
         .from('igrejas')
-        .update({ nome, cnpj })
+        .update(updateData)
         .eq('id', user.igrejaId)
 
       if (error) {
@@ -96,33 +119,97 @@ export function DadosIgreja({ user }: { user: AppUser }) {
   }
 
   return (
-    <div className="max-w-xl mx-auto space-y-4">
+    <div className="max-w-xl mx-auto p-4 space-y-6">
+      {/* Título da página */}
       <div>
-        <h2 className="text-base font-semibold">Dados da Igreja</h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400">Somente administradores podem editar.</p>
+        <h1 className="text-xl md:text-2xl font-bold text-neutral-900 dark:text-neutral-100">Dados da Igreja</h1>
       </div>
 
-      <div className="rounded-2xl bg-white/80 dark:bg-[#111B2E] p-4 space-y-3">
-        <IonItem lines="none" className="rounded-xl">
-          <IonLabel position="stacked">Nome</IonLabel>
-          <IonInput
-            value={form.nome}
-            onIonChange={(e) => setForm((prev) => ({ ...prev, nome: String(e.detail.value ?? '') }))}
-          />
-        </IonItem>
+      {/* Dados Básicos */}
+      <div className="rounded-xl bg-white dark:bg-neutral-800 p-4 space-y-4">
+        <h2 className="text-base md:text-lg font-semibold text-neutral-900 dark:text-neutral-100">Dados Básicos</h2>
 
-        <IonItem lines="none" className="rounded-xl">
-          <IonLabel position="stacked">CNPJ</IonLabel>
-          <IonInput
-            value={form.cnpj}
-            inputMode="numeric"
-            onIonChange={(e) => setForm((prev) => ({ ...prev, cnpj: String(e.detail.value ?? '') }))}
-          />
-        </IonItem>
+        <Input
+          label="Nome"
+          value={form.nome}
+          onChange={(e) => setForm((prev) => ({ ...prev, nome: e.target.value }))}
+          placeholder="Nome da igreja"
+          disabled={loading || initialLoading}
+        />
 
-        <IonButton expand="block" size="small" disabled={!canSave} onClick={() => void salvar()}>
+        <Input
+          label="CNPJ"
+          value={form.cnpj}
+          onChange={(e) => setForm((prev) => ({ ...prev, cnpj: e.target.value }))}
+          placeholder="00.000.000/0000-00"
+          disabled={loading || initialLoading}
+          helperText="Digite apenas os números"
+        />
+
+        <Button
+          variant="primary"
+          fullWidth
+          disabled={!canSave}
+          loading={loading}
+          onClick={() => void salvar()}
+        >
           {loading ? 'Salvando...' : 'Salvar'}
-        </IonButton>
+        </Button>
+      </div>
+
+      {/* Configurações WhatsApp */}
+      <div className="rounded-xl bg-white dark:bg-neutral-800 p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm md:text-base font-semibold text-neutral-900 dark:text-neutral-100">
+              Notificações via WhatsApp
+            </h3>
+            <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
+              Envie notificações via WhatsApp usando Evolution API
+            </p>
+          </div>
+          <IonToggle
+            checked={form.whatsapp_habilitado}
+            onIonChange={(e) =>
+              setForm((prev) => ({ ...prev, whatsapp_habilitado: e.detail.checked }))
+            }
+            style={{ '--handle-width': '20px', '--handle-height': '20px', '--track-height': '24px', '--track-width': '44px' } as React.CSSProperties}
+          />
+        </div>
+
+        {form.whatsapp_habilitado && (
+          <div className="space-y-4 pt-2">
+            <Input
+              label="Instance ID (Evolution API)"
+              value={form.whatsapp_instance_id}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, whatsapp_instance_id: e.target.value }))
+              }
+              placeholder="minha-instancia"
+              disabled={loading || initialLoading}
+            />
+
+            <Input
+              label="API Key (Evolution API)"
+              helperText={!form.whatsapp_api_key ? 'Deixe em branco para manter a atual' : undefined}
+              type="password"
+              value={form.whatsapp_api_key}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, whatsapp_api_key: e.target.value }))
+              }
+              placeholder="Sua API Key"
+              disabled={loading || initialLoading}
+            />
+
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-info-50 dark:bg-info-900/20">
+              <span className="text-info-600 dark:text-info-400 text-sm">💡</span>
+              <p className="text-xs md:text-sm text-info-700 dark:text-info-300">
+                Após configurar, os usuários poderão escolher receber notificações via WhatsApp em
+                suas preferências de perfil.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -21,7 +21,9 @@ import useEscalaSharedData from './Escala/hooks/useEscalaSharedData'
 import useConfirmDialog from './Escala/hooks/useConfirmDialog'
 import { supabase } from '../lib/supabase'
 import { useInlineToast } from '../lib/inlineToastContext'
+import { useEntitlement } from '../lib/useEntitlement'
 import type { AppUser } from '../types'
+import { PaywallModal } from '../components/PaywallModal'
 
 interface EscalaProps {
   user: AppUser
@@ -34,10 +36,12 @@ export function Escala({ user }: EscalaProps) {
 
   // Mensagem de sucesso
   const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null)
+  const [paywallOpen, setPaywallOpen] = useState(false)
 
   const { abrirConfirmacao, portal: confirmDialogPortal } = useConfirmDialog()
 
   const agenda = useAgenda({ user, supabase, showToast, setMensagemSucesso, abrirConfirmacao })
+  const { entitlement } = useEntitlement(user.igrejaId)
 
   const equipe = useIndisponibilidadeEquipe({
     supabase,
@@ -78,7 +82,14 @@ export function Escala({ user }: EscalaProps) {
     }
   }, [user.id, user.igrejaId, user.papel])
 
-  const handleImprimirEscalaMensal = agenda.handleImprimirEscalaMensal
+  const handleImprimirEscalaMensal = () => {
+    if (!entitlement || entitlement.plano !== 'pro') {
+      showToast({ message: 'Funcionalidade disponivel apenas no plano Pro.', color: 'warning' })
+      setPaywallOpen(true)
+      return
+    }
+    agenda.handleImprimirEscalaMensal()
+  }
 
   return (
     <main className="space-y-4">
@@ -153,7 +164,14 @@ export function Escala({ user }: EscalaProps) {
               setNovaMusicaId={agenda.setNovaMusicaId}
               novaMusicaTom={agenda.novaMusicaTom}
               setNovaMusicaTom={agenda.setNovaMusicaTom}
+              tipoItemRepertorio={agenda.tipoItemRepertorio}
+              setTipoItemRepertorio={agenda.setTipoItemRepertorio}
+              medleySongIds={agenda.medleySongIds}
+              setMedleySongIds={agenda.setMedleySongIds}
+              medleyModalOpen={agenda.medleyModalOpen}
+              setMedleyModalOpen={agenda.setMedleyModalOpen}
               adicionarMusicaEscala={agenda.adicionarMusicaEscala}
+              reordenarMusicasEscala={agenda.reordenarMusicasEscala}
               removerMusicaEscala={agenda.removerMusicaEscala}
               alternarMinistrante={agenda.alternarMinistrante}
               removerEscalado={agenda.removerEscalado}
@@ -225,6 +243,20 @@ export function Escala({ user }: EscalaProps) {
       )}
 
       {confirmDialogPortal}
+
+      <PaywallModal
+        isOpen={paywallOpen}
+        showAnual={false}
+        onClose={() => setPaywallOpen(false)}
+        onAssinarMensal={() => {
+          showToast({ message: 'Assinatura disponivel no app mobile.', color: 'medium' })
+          setPaywallOpen(false)
+        }}
+        onAssinarAnual={() => {
+          showToast({ message: 'Assinatura anual disponivel no app mobile.', color: 'medium' })
+          setPaywallOpen(false)
+        }}
+      />
     </main>
   )
 }

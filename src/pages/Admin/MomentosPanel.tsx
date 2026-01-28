@@ -19,6 +19,10 @@ import {
 } from 'ionicons/icons'
 import { supabase } from '../../lib/supabase'
 import type { AppUser, MomentoCulto } from '../../types'
+import {
+  LABEL_CLASSES,
+  INPUT_STYLES,
+} from '../../styles/form-styles'
 
 interface MomentosPanelProps {
   user: AppUser
@@ -202,7 +206,7 @@ export function MomentosPanel({ user, momentos, onMomentosChange }: MomentosPane
           <p className="text-sm text-slate-300">Nenhum momento de culto cadastrado ainda.</p>
         ) : (
           <>
-            <div className="text-[11px] text-slate-400 mb-3">
+            <div className={`${LABEL_CLASSES.field} text-slate-400 mb-3`}>
               Total: {momentos.length} | Página {paginaMomento} de {Math.ceil(momentos.length / itensPorPagina)}
             </div>
             <ul className="space-y-2 list-none text-sm text-slate-200">
@@ -222,7 +226,7 @@ export function MomentosPanel({ user, momentos, onMomentosChange }: MomentosPane
                             value={momentoEditandoNome}
                             onIonInput={(e) => setMomentoEditandoNome(String(e.detail.value ?? ''))}
                             className="flex-1"
-                            style={{ fontSize: '10.5px' }}
+                            style={INPUT_STYLES.default}
                           />
                           <IonButton
                             type="button"
@@ -247,7 +251,7 @@ export function MomentosPanel({ user, momentos, onMomentosChange }: MomentosPane
                           </IonButton>
                         </form>
                       ) : (
-                        <span className="flex-1 truncate text-[15px] font-medium text-slate-100">{m.nome}</span>
+                        <span className={`flex-1 truncate ${LABEL_CLASSES.item}`}>{m.nome}</span>
                       )}
 
                       {!emEdicao && (user.papel === 'admin' || user.papel === 'lider') && (
@@ -324,7 +328,7 @@ export function MomentosPanel({ user, momentos, onMomentosChange }: MomentosPane
                 >
                   <IonIcon slot="icon-only" icon={chevronBackOutline} />
                 </IonButton>
-                <p className="text-[11px] text-slate-400">
+                <p className={`${LABEL_CLASSES.field} text-slate-400`}>
                   Página {paginaMomento} de {Math.ceil(momentos.length / itensPorPagina)}
                 </p>
                 <IonButton
@@ -359,14 +363,14 @@ export function MomentosPanel({ user, momentos, onMomentosChange }: MomentosPane
             <div slot="content" className="p-4">
               <form onSubmit={handleCreateMomento} className="space-y-3">
                 <IonItem lines="none" className="rounded-xl">
-                  <IonLabel position="stacked" className="text-[11px] font-semibold" style={{ fontWeight: 700 }}>
+                  <IonLabel position="stacked" className={LABEL_CLASSES.field}>
                     Nome do momento
                   </IonLabel>
                   <IonInput
                     value={novoMomento}
                     onIonInput={(e) => setNovoMomento(String(e.detail.value ?? ''))}
                     placeholder="Ex: Abertura, Palavra, Oferta"
-                    style={{ fontSize: '10.5px' }}
+                    style={INPUT_STYLES.default}
                   />
                 </IonItem>
 

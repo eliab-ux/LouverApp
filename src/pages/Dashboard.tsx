@@ -50,17 +50,20 @@ import { Escala } from './Escala'
 import { ThemeSelectRow } from '../components/ThemeSelectRow'
 import { MeuPerfil } from './MeuPerfil'
 import { DadosIgreja } from './DadosIgreja'
+import { Assinatura } from './Assinatura'
 
 type EscalaMusica = {
   id: string
   tom_escolhido: string | null
   ordem: number
-  musica: {
+  tipo: 'song' | 'medley'
+  musica_ids: string[]
+  musicas: Array<{
     id: string
     nome: string
     bpm: number | null
     links: string | null
-  }
+  }>
 }
 
 type MinhaEscala = {
@@ -68,7 +71,7 @@ type MinhaEscala = {
   funcao: string
   evento: {
     id: string
-    tipo: string
+    tipo: string | null
     data: string
     hora: string | null
   }
@@ -221,7 +224,7 @@ function DashboardOverviewContent({
                           </IonCardSubtitle>
 
                           <div className="text-[0.7rem] font-semibold text-gray-700 text-right whitespace-nowrap">
-                            {item.evento.tipo === 'culto' ? 'Culto' : 'Ensaio'}
+                            {item.evento.tipo === 'culto' ? 'Culto' : item.evento.tipo === 'ensaio' ? 'Ensaio' : 'Evento'}
                           </div>
                         </div>
                       </IonCardHeader>
@@ -268,30 +271,37 @@ function DashboardOverviewContent({
                           <>
                             <div className="mt-1" />
                             <div className="space-y-1">
-                              {item.musicas.map((em, idx) => (
-                                <div key={em.id} className="flex items-start justify-between gap-2 text-[0.65rem]">
-                                  <div className="min-w-0 flex-1">
-                                    <span className="text-gray-500 mr-1">{idx + 1}.</span>
-                                    <span className="truncate">{em.musica.nome}</span>
-                                    {em.tom_escolhido && (
-                                      <span className="text-[0.65rem] text-gray-500"> ({em.tom_escolhido})</span>
-                                    )}
-                                  </div>
+                              {item.musicas.map((em, idx) => {
+                                const nomesMusicas = em.musicas && em.musicas.length > 0
+                                  ? em.musicas.map((m) => m.nome).join(' / ')
+                                  : 'Músicas'
+                                const primeiraMusica = em.musicas?.[0]
 
-                                  <div className="flex items-center gap-3 shrink-0">
-                                    {em.musica.links && (
-                                      <a
-                                        href={em.musica.links}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-primary inline-flex items-center justify-center h-5 w-5"
-                                      >
-                                        <IonIcon icon={linkOutline} className="text-sm" />
-                                      </a>
-                                    )}
+                                return (
+                                  <div key={em.id} className="flex items-start justify-between gap-2 text-[0.65rem]">
+                                    <div className="min-w-0 flex-1">
+                                      <span className="text-gray-500 mr-1">{idx + 1}.</span>
+                                      <span className="break-words">{nomesMusicas}</span>
+                                      {em.tom_escolhido && (
+                                        <span className="text-[0.65rem] text-gray-500"> | Tom: {em.tom_escolhido}</span>
+                                      )}
+                                    </div>
+
+                                    <div className="flex items-center gap-3 shrink-0">
+                                      {primeiraMusica?.links && (
+                                        <a
+                                          href={primeiraMusica.links}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-primary inline-flex items-center justify-center h-5 w-5"
+                                        >
+                                          <IonIcon icon={linkOutline} className="text-sm" />
+                                        </a>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
+                                )
+                              })}
                             </div>
                           </>
                         ) : (
@@ -434,42 +444,74 @@ function InicioPage({
         if (escalaIds.length > 0) {
           const { data: escalaMusicasData, error: escalaMusicasErr } = await supabase
             .from('escala_musicas')
-            .select(
-              `
-            musica:musica_id (
-              id,
-              nome,
-              categoria_principal:categoria_principal_id (
-                id,
-                nome
-              )
-            )
-          `,
-            )
+            .select('musica_ids')
             .in('escala_id', escalaIds)
 
           if (escalaMusicasErr) {
             console.error('[Inicio] carregarEstatisticas - erro ao carregar escala_musicas', escalaMusicasErr)
           }
 
+          // Coletar todos os IDs de músicas (incluindo medleys)
+          const allMusicIds = new Set<string>()
           ;(escalaMusicasData ?? []).forEach((em) => {
             if (!em || typeof em !== 'object') return
-            const musica = (em as { musica?: unknown }).musica
-            if (!musica || typeof musica !== 'object') return
-            const musicaId = (musica as { id?: unknown }).id
-            const musicaNome = (musica as { nome?: unknown }).nome
-            if (typeof musicaId !== 'string' || typeof musicaNome !== 'string') return
-            if (musicasContagem[musicaId]) musicasContagem[musicaId].vezes++
-            else musicasContagem[musicaId] = { nome: musicaNome, vezes: 1 }
-
-            const categoriaPrincipal = (musica as { categoria_principal?: unknown }).categoria_principal
-            if (!categoriaPrincipal || typeof categoriaPrincipal !== 'object') return
-            const catId = (categoriaPrincipal as { id?: unknown }).id
-            const catNome = (categoriaPrincipal as { nome?: unknown }).nome
-            if (typeof catId !== 'string' || typeof catNome !== 'string') return
-            if (categoriasContagem[catId]) categoriasContagem[catId].quantidade++
-            else categoriasContagem[catId] = { nome: catNome, quantidade: 1 }
+            const musicaIds = (em as { musica_ids?: unknown }).musica_ids
+            if (Array.isArray(musicaIds)) {
+              musicaIds.forEach((id) => {
+                if (typeof id === 'string') allMusicIds.add(id)
+              })
+            }
           })
+
+          // Buscar informações das músicas
+          if (allMusicIds.size > 0) {
+            const { data: musicasInfoData, error: musicasInfoErr } = await supabase
+              .from('musicas')
+              .select(
+                `
+                id,
+                nome,
+                categoria_principal:categoria_principal_id (
+                  id,
+                  nome
+                )
+              `,
+              )
+              .in('id', Array.from(allMusicIds))
+
+            if (musicasInfoErr) {
+              console.error('[Inicio] carregarEstatisticas - erro ao carregar info das músicas', musicasInfoErr)
+            }
+
+            // Contar ocorrências
+            ;(escalaMusicasData ?? []).forEach((em) => {
+              if (!em || typeof em !== 'object') return
+              const musicaIds = (em as { musica_ids?: unknown }).musica_ids
+              if (!Array.isArray(musicaIds)) return
+
+              musicaIds.forEach((musicaId) => {
+                if (typeof musicaId !== 'string') return
+                const musicaInfo = (musicasInfoData ?? []).find((m) => {
+                  return m && typeof m === 'object' && (m as { id?: unknown }).id === musicaId
+                })
+                if (!musicaInfo || typeof musicaInfo !== 'object') return
+
+                const musicaNome = (musicaInfo as { nome?: unknown }).nome
+                if (typeof musicaNome !== 'string') return
+
+                if (musicasContagem[musicaId]) musicasContagem[musicaId].vezes++
+                else musicasContagem[musicaId] = { nome: musicaNome, vezes: 1 }
+
+                const categoriaPrincipal = (musicaInfo as { categoria_principal?: unknown }).categoria_principal
+                if (!categoriaPrincipal || typeof categoriaPrincipal !== 'object') return
+                const catId = (categoriaPrincipal as { id?: unknown }).id
+                const catNome = (categoriaPrincipal as { nome?: unknown }).nome
+                if (typeof catId !== 'string' || typeof catNome !== 'string') return
+                if (categoriasContagem[catId]) categoriasContagem[catId].quantidade++
+                else categoriasContagem[catId] = { nome: catNome, quantidade: 1 }
+              })
+            })
+          }
         }
 
         const musicasMaisTocadas = Object.values(musicasContagem)
@@ -576,12 +618,8 @@ function InicioPage({
             tom_escolhido,
             ordem,
             escala_id,
-            musica:musica_id (
-              id,
-              nome,
-              bpm,
-              links
-            )
+            tipo,
+            musica_ids
           `,
           )
           .in('escala_id', escalaIds)
@@ -589,6 +627,47 @@ function InicioPage({
 
         if (musicasErr) {
           console.error('[Inicio] carregarMinhasEscalas - erro ao carregar escala_musicas', musicasErr)
+        }
+
+        // Buscar todas as músicas referenciadas
+        const allMusicIds = new Set<string>()
+        ;(musicasData ?? []).forEach((m) => {
+          if (!m || typeof m !== 'object') return
+          const musicaIds = (m as { musica_ids?: unknown }).musica_ids
+          if (Array.isArray(musicaIds)) {
+            musicaIds.forEach((id) => {
+              if (typeof id === 'string') allMusicIds.add(id)
+            })
+          }
+        })
+
+        const musicasMap = new Map<string, { id: string; nome: string; bpm: number | null; links: string | null }>()
+
+        if (allMusicIds.size > 0) {
+          const { data: musicasInfoData, error: musicasInfoErr } = await supabase
+            .from('musicas')
+            .select('id, nome, bpm, links')
+            .in('id', Array.from(allMusicIds))
+
+          if (musicasInfoErr) {
+            console.error('[Inicio] carregarMinhasEscalas - erro ao carregar info das músicas', musicasInfoErr)
+          } else {
+            ;(musicasInfoData ?? []).forEach((m) => {
+              if (!m || typeof m !== 'object') return
+              const id = (m as { id?: unknown }).id
+              const nome = (m as { nome?: unknown }).nome
+              const bpm = (m as { bpm?: unknown }).bpm
+              const links = (m as { links?: unknown }).links
+              if (typeof id === 'string' && typeof nome === 'string') {
+                musicasMap.set(id, {
+                  id,
+                  nome,
+                  bpm: typeof bpm === 'number' || bpm === null ? (bpm as number | null) : null,
+                  links: typeof links === 'string' || links === null ? (links as string | null) : null,
+                })
+              }
+            })
+          }
         }
 
         const { data: escaladosData, error: escaladosErr } = await supabase
@@ -641,24 +720,25 @@ function InicioPage({
           const rowId = (m as { id?: unknown }).id
           const tomEscolhido = (m as { tom_escolhido?: unknown }).tom_escolhido
           const ordem = (m as { ordem?: unknown }).ordem
-          const musica = (m as { musica?: unknown }).musica
-          if (typeof rowId !== 'string' || typeof ordem !== 'number' || !musica || typeof musica !== 'object') return
-          const musicaId = (musica as { id?: unknown }).id
-          const musicaNome = (musica as { nome?: unknown }).nome
-          const musicaBpm = (musica as { bpm?: unknown }).bpm
-          const musicaLinks = (musica as { links?: unknown }).links
-          if (typeof musicaId !== 'string' || typeof musicaNome !== 'string') return
+          const tipo = (m as { tipo?: unknown }).tipo
+          const musicaIds = (m as { musica_ids?: unknown }).musica_ids
+          if (typeof rowId !== 'string' || typeof ordem !== 'number') return
+          if (!Array.isArray(musicaIds) || musicaIds.length === 0) return
+
+          const musicas = musicaIds
+            .map((id) => (typeof id === 'string' ? musicasMap.get(id) : null))
+            .filter((m): m is { id: string; nome: string; bpm: number | null; links: string | null } => m !== undefined && m !== null)
+
+          if (musicas.length === 0) return
+
           musicasPorEscala[escalaId].push({
             id: rowId,
             tom_escolhido:
               typeof tomEscolhido === 'string' || tomEscolhido === null ? (tomEscolhido as string | null) : null,
             ordem,
-            musica: {
-              id: musicaId,
-              nome: musicaNome,
-              bpm: typeof musicaBpm === 'number' || musicaBpm === null ? (musicaBpm as number | null) : null,
-              links: typeof musicaLinks === 'string' || musicaLinks === null ? (musicaLinks as string | null) : null,
-            },
+            tipo: tipo === 'song' || tipo === 'medley' ? (tipo as 'song' | 'medley') : 'song',
+            musica_ids: musicaIds.filter((id): id is string => typeof id === 'string'),
+            musicas,
           })
         })
       }
@@ -671,14 +751,14 @@ function InicioPage({
           const escalaId = escala?.id
           if (typeof obj.id !== 'string' || typeof obj.funcao !== 'string') return null
           if (!escala || typeof escalaId !== 'string' || typeof escala.publicada !== 'boolean') return null
-          if (!evento || typeof evento.id !== 'string' || typeof evento.tipo !== 'string' || typeof evento.data !== 'string') return null
+          if (!evento || typeof evento.id !== 'string' || typeof evento.data !== 'string') return null
 
           return {
             id: obj.id,
             funcao: obj.funcao,
             evento: {
               id: evento.id,
-              tipo: evento.tipo,
+              tipo: (typeof evento.tipo === 'string' ? evento.tipo : null) as string | null,
               data: evento.data,
               hora: typeof evento.hora === 'string' || evento.hora === null ? (evento.hora as string | null) : null,
             },
@@ -853,6 +933,12 @@ export function Dashboard({ user }: { user: AppUser }) {
               </IonItem>
             </IonMenuToggle>
 
+            <IonMenuToggle autoHide={false}>
+              <IonItem button detail={false} routerLink="/app/assinatura">
+                <IonLabel>Assinatura</IonLabel>
+              </IonItem>
+            </IonMenuToggle>
+
             {user.papel === 'admin' && (
               <IonMenuToggle autoHide={false}>
                 <IonItem button detail={false} routerLink="/app/dados-igreja">
@@ -997,6 +1083,15 @@ export function Dashboard({ user }: { user: AppUser }) {
             render={() => (
               <DashboardTabPageFrame user={user} handleSignOut={() => void handleSignOut()}>
                 <MeuPerfil user={user} />
+              </DashboardTabPageFrame>
+            )}
+          />
+          <Route
+            exact
+            path="/app/assinatura"
+            render={() => (
+              <DashboardTabPageFrame user={user} handleSignOut={() => void handleSignOut()}>
+                <Assinatura user={user} />
               </DashboardTabPageFrame>
             )}
           />
