@@ -8,7 +8,11 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -p . --noEmit",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:sync:ios": "npm run build && npx cap sync ios",
+    "cap:open:ios": "npx cap open ios",
+    "ios:prepare": "npm run build && npx cap sync ios"
   },
   "dependencies": {
     "@capacitor/cli": "^8.0.2",
