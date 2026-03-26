@@ -17,6 +17,11 @@ dist-ssr
 dev-dist
 supabase/.temp
 
+# Artefatos de build iOS / certificados
+UploadPlataforma/
+*.ipa
+*.certSigningRequest
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
