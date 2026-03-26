@@ -68,6 +68,16 @@ ion-datetime-button.datetime-button-small::part(native) {
   border-radius: 10px;
 }
 
+/* Previne zoom automático do iOS em inputs com font-size < 16px */
+ion-input input,
+ion-textarea textarea,
+ion-searchbar input,
+input,
+textarea,
+select {
+  font-size: max(16px, 1em) !important;
+}
+
 /* Padronização de labels dos IonSelect e IonInput */
 ion-select::part(label),
 ion-input::part(label) {

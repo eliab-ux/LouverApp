@@ -16,8 +16,9 @@
 }
 
 /* Inputs compactos e modernos */
+/* font-size mínimo 16px: abaixo disso o iOS faz zoom automático no foco */
 .login-page .login-input {
-  font-size: 14px;
+  font-size: 16px;
   --border-radius: 12px;
   --padding-top: 10px;
   --padding-bottom: 10px;
