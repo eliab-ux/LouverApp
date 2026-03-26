@@ -12,7 +12,8 @@
     "cap:sync": "npm run build && npx cap sync",
     "cap:sync:ios": "npm run build && npx cap sync ios",
     "cap:open:ios": "npx cap open ios",
-    "ios:prepare": "npm run build && npx cap sync ios"
+    "ios:prepare": "npm run build && npx cap sync ios",
+    "assets:generate": "npx @capacitor/assets generate --ios"
   },
   "dependencies": {
     "@capacitor/cli": "^8.0.2",
@@ -29,6 +30,7 @@
     "react-router-dom": "^5.3.4"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^9.39.1",
     "@tailwindcss/postcss": "^4.1.17",
     "@types/node": "^24.10.5",
