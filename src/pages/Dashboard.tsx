@@ -358,8 +358,8 @@ function DashboardTabPageFrame({
         </IonToolbar>
       </IonHeader>
 
-      <IonContent fullscreen>
-        <div className="w-full min-h-[calc(100vh-2rem)] rounded-2xl bg-slate-50 text-slate-900 dark:bg-[#0B1220] dark:text-slate-100 px-4 py-4">
+      <IonContent>
+        <div className="w-full min-h-full rounded-2xl bg-slate-50 text-slate-900 dark:bg-[#0B1220] dark:text-slate-100 px-4 py-4">
           {children}
         </div>
       </IonContent>

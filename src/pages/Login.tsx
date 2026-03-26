@@ -296,7 +296,7 @@ export function Login({ onAuthSuccess }: AuthScreenProps) {
   if (showForgotPassword) {
     return (
       <IonPage className="login-page">
-        <IonContent fullscreen>
+        <IonContent>
           <div className="min-h-full w-full px-4 py-10 flex items-center justify-center bg-slate-50">
             <div className="w-full max-w-sm">
               <div className="text-center mb-4">
@@ -372,7 +372,7 @@ export function Login({ onAuthSuccess }: AuthScreenProps) {
 
   return (
     <IonPage className="login-page">
-      <IonContent fullscreen>
+      <IonContent>
         <div className="min-h-full w-full px-4 py-10 flex items-center justify-center bg-slate-50">
           <div className="w-full max-w-sm">
             <div className="text-center mb-4">

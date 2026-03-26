@@ -38,6 +38,15 @@ ion-popover.musicas-select-popover-small ion-label {
   font-size: 14px;
 }
 
+/* Safe area para iPhone SE e modelos com notch/home indicator */
+ion-footer ion-toolbar:last-of-type {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+ion-header ion-toolbar:first-of-type {
+  padding-top: env(safe-area-inset-top);
+}
+
 ion-datetime-button.datetime-button-small::part(native) {
   font-size: 11px;
   height: 28px;
