@@ -47,6 +47,19 @@ ion-header ion-toolbar:first-of-type {
   padding-top: env(safe-area-inset-top);
 }
 
+/* Padding lateral para conteúdo não ser cortado */
+ion-content {
+  --padding-start: max(16px, env(safe-area-inset-left));
+  --padding-end: max(16px, env(safe-area-inset-right));
+}
+
+/* Tab bar respeita safe area lateral */
+ion-tab-bar {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 ion-datetime-button.datetime-button-small::part(native) {
   font-size: 11px;
   height: 28px;
