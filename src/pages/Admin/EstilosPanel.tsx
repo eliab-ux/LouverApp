@@ -32,10 +32,14 @@ interface EstilosPanelProps{
 
 export function EstilosPanel({ user, estilos, onEstilosChange }: EstilosPanelProps) {
   const [novoEstilo, setNovoEstilo] = useState('')
+  const [novaEstiloCor, setNovaEstiloCor] = useState('')
+  const [novaEstiloLegenda, setNovaEstiloLegenda] = useState('')
   const [savingEstilo, setSavingEstilo] = useState(false)
   const [estiloError, setEstiloError] = useState<string | null>(null)
   const [estiloEditandoId, setEstiloEditandoId] = useState<string | null>(null)
   const [estiloEditandoNome, setEstiloEditandoNome] = useState('')
+  const [estiloEditandoCor, setEstiloEditandoCor] = useState('')
+  const [estiloEditandoLegenda, setEstiloEditandoLegenda] = useState('')
   const itensPorPagina = 7
   const [paginaEstilo, setPaginaEstilo] = useState(1)
 
@@ -110,6 +114,8 @@ export function EstilosPanel({ user, estilos, onEstilosChange }: EstilosPanelPro
       const { error } = await supabase.from('estilos').insert({
         nome: novoEstilo.trim(),
         igreja_id: user.igrejaId,
+        cor: novaEstiloCor || null,
+        legenda: novaEstiloLegenda.trim() || null,
       })
 
       if (error) {
@@ -118,6 +124,8 @@ export function EstilosPanel({ user, estilos, onEstilosChange }: EstilosPanelPro
       }
 
       setNovoEstilo('')
+      setNovaEstiloCor('')
+      setNovaEstiloLegenda('')
       onEstilosChange()
     } catch (e) {
       console.error(e)
@@ -131,11 +139,15 @@ export function EstilosPanel({ user, estilos, onEstilosChange }: EstilosPanelPro
     setEstiloError(null)
     setEstiloEditandoId(estilo.id)
     setEstiloEditandoNome(estilo.nome)
+    setEstiloEditandoCor(estilo.cor ?? '')
+    setEstiloEditandoLegenda(estilo.legenda ?? '')
   }
 
   const cancelarEdicaoEstilo = () => {
     setEstiloEditandoId(null)
     setEstiloEditandoNome('')
+    setEstiloEditandoCor('')
+    setEstiloEditandoLegenda('')
   }
 
   const salvarEdicaoEstilo = async (event: FormEvent) => {
@@ -148,7 +160,11 @@ export function EstilosPanel({ user, estilos, onEstilosChange }: EstilosPanelPro
     try {
       const { error } = await supabase
         .from('estilos')
-        .update({ nome: estiloEditandoNome.trim() })
+        .update({
+          nome: estiloEditandoNome.trim(),
+          cor: estiloEditandoCor || null,
+          legenda: estiloEditandoLegenda.trim() || null,
+        })
         .eq('id', estiloEditandoId)
 
       if (error) {
@@ -158,6 +174,8 @@ export function EstilosPanel({ user, estilos, onEstilosChange }: EstilosPanelPro
 
       setEstiloEditandoId(null)
       setEstiloEditandoNome('')
+      setEstiloEditandoCor('')
+      setEstiloEditandoLegenda('')
       onEstilosChange()
     } catch (e) {
       console.error(e)
@@ -218,38 +236,77 @@ export function EstilosPanel({ user, estilos, onEstilosChange }: EstilosPanelPro
                     className="flex items-center justify-between gap-3 rounded-2xl bg-slate-950/30 px-4 py-3 shadow-sm"
                   >
                     {estiloEditandoId === est.id ? (
-                      <form onSubmit={salvarEdicaoEstilo} className="flex items-center gap-2 flex-1">
+                      <form onSubmit={salvarEdicaoEstilo} className="flex flex-col gap-2 flex-1">
+                        <div className="flex items-center gap-2">
+                          <IonInput
+                            value={estiloEditandoNome}
+                            onIonInput={(e) => setEstiloEditandoNome(String(e.detail.value ?? ''))}
+                            className="flex-1"
+                            style={INPUT_STYLES.default}
+                          />
+                          <IonButton
+                            type="button"
+                            fill="clear"
+                            size="small"
+                            onClick={cancelarEdicaoEstilo}
+                            disabled={savingEstilo}
+                            aria-label="Cancelar edição"
+                            className="m-0 h-7"
+                          >
+                            <IonIcon slot="icon-only" icon={closeOutline} />
+                          </IonButton>
+                          <IonButton
+                            type="submit"
+                            fill="clear"
+                            size="small"
+                            disabled={savingEstilo}
+                            aria-label="Salvar edição"
+                            className="m-0 h-7"
+                          >
+                            <IonIcon slot="icon-only" icon={checkmarkOutline} />
+                          </IonButton>
+                        </div>
+                        <div className="flex items-center gap-3 px-1">
+                          <label className="flex items-center gap-2 text-xs text-slate-400">
+                            <span>Cor</span>
+                            <input
+                              type="color"
+                              value={estiloEditandoCor || '#6366f1'}
+                              onChange={(e) => setEstiloEditandoCor(e.target.value)}
+                              className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent"
+                            />
+                            {estiloEditandoCor && (
+                              <button
+                                type="button"
+                                onClick={() => setEstiloEditandoCor('')}
+                                className="text-slate-500 hover:text-slate-300 text-xs"
+                              >
+                                limpar
+                              </button>
+                            )}
+                          </label>
+                        </div>
                         <IonInput
-                          value={estiloEditandoNome}
-                          onIonInput={(e) => setEstiloEditandoNome(String(e.detail.value ?? ''))}
-                          className="flex-1"
+                          value={estiloEditandoLegenda}
+                          onIonInput={(e) => setEstiloEditandoLegenda(String(e.detail.value ?? ''))}
+                          placeholder="Legenda (opcional)"
                           style={INPUT_STYLES.default}
                         />
-                        <IonButton
-                          type="button"
-                          fill="clear"
-                          size="small"
-                          onClick={cancelarEdicaoEstilo}
-                          disabled={savingEstilo}
-                          aria-label="Cancelar edição"
-                          className="m-0 h-7"
-                        >
-                          <IonIcon slot="icon-only" icon={closeOutline} />
-                        </IonButton>
-                        <IonButton
-                          type="submit"
-                          fill="clear"
-                          size="small"
-                          disabled={savingEstilo}
-                          aria-label="Salvar edição"
-                          className="m-0 h-7"
-                        >
-                          <IonIcon slot="icon-only" icon={checkmarkOutline} />
-                        </IonButton>
                       </form>
                     ) : (
                       <>
-                        <span className={`flex-1 truncate ${LABEL_CLASSES.item}`}>{est.nome}</span>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          {est.cor && (
+                            <span
+                              className="inline-block w-3 h-3 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: est.cor }}
+                            />
+                          )}
+                          <span className={`flex-1 truncate ${LABEL_CLASSES.item}`}>{est.nome}</span>
+                          {est.legenda && (
+                            <span className="text-[10px] text-slate-500 truncate max-w-[100px]">{est.legenda}</span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2">
                           <IonButton
                             type="button"
@@ -364,6 +421,39 @@ export function EstilosPanel({ user, estilos, onEstilosChange }: EstilosPanelPro
                     placeholder="Ex: Contemplação, Proclamação..."
                     style={INPUT_STYLES.default}
                     required
+                  />
+                </IonItem>
+
+                <div className="flex items-center gap-3 px-1">
+                  <label className="flex items-center gap-2 text-xs text-slate-400">
+                    <span>Cor (opcional)</span>
+                    <input
+                      type="color"
+                      value={novaEstiloCor || '#6366f1'}
+                      onChange={(e) => setNovaEstiloCor(e.target.value)}
+                      className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent"
+                    />
+                    {novaEstiloCor && (
+                      <button
+                        type="button"
+                        onClick={() => setNovaEstiloCor('')}
+                        className="text-slate-500 hover:text-slate-300 text-xs"
+                      >
+                        limpar
+                      </button>
+                    )}
+                  </label>
+                </div>
+
+                <IonItem lines="none" className="rounded-xl">
+                  <IonLabel position="stacked" className={LABEL_CLASSES.field}>
+                    Legenda (opcional)
+                  </IonLabel>
+                  <IonInput
+                    value={novaEstiloLegenda}
+                    onIonInput={(e) => setNovaEstiloLegenda(String(e.detail.value ?? ''))}
+                    placeholder="Ex: Músicas lentas e contemplativas"
+                    style={INPUT_STYLES.default}
                   />
                 </IonItem>
 

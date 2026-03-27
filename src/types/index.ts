@@ -36,6 +36,8 @@ export type MomentoCulto = {
 export type Estilo = {
   id: string
   nome: string
+  cor?: string | null
+  legenda?: string | null
 }
 
 export type Musica = {
@@ -47,7 +49,7 @@ export type Musica = {
   tons?: string[] | null
   categoria_principal?: { id: string; nome: string } | null
   momento?: { id: string; nome: string } | null
-  estilo?: { id: string; nome: string } | null
+  estilo?: { id: string; nome: string; cor?: string | null; legenda?: string | null } | null
 }
 
 // ==========================================

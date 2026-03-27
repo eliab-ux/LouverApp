@@ -4,20 +4,26 @@ import type { CSSProperties } from 'react'
 import {
   IonAlert,
   IonButton,
+  IonButtons,
   IonCard,
   IonChip,
+  IonContent,
   IonGrid,
+  IonHeader,
   IonIcon,
   IonInput,
   IonCol,
   IonItem,
   IonLabel,
   IonList,
+  IonModal,
   IonRow,
   IonSearchbar,
   IonSelect,
   IonSelectOption,
+  IonTitle,
   IonToggle,
+  IonToolbar,
   IonAccordion,
   IonAccordionGroup,
   useIonRouter,
@@ -33,6 +39,7 @@ import {
   chevronBackOutline,
   chevronForwardOutline,
   swapVerticalOutline,
+  informationCircleOutline,
 } from 'ionicons/icons'
 import { supabase } from '../lib/supabase'
 import type { AppUser, Musica, Categoria, MomentoCulto, Estilo } from '../types'
@@ -135,6 +142,8 @@ export function Musicas({
   const [ordenacaoDir, setOrdenacaoDir] = useState<'asc' | 'desc'>('asc')
   const [paginaAtual, setPaginaAtual] = useState(1)
   const musicasPorPagina = 5
+  const [showLegenda, setShowLegenda] = useState(false)
+  const estilosComCor = estilos.filter(e => e.cor)
   
   // CSV import será implementado no AdminPanel
 
@@ -148,7 +157,7 @@ export function Musicas({
           `id, nome, bpm, possui_vs, links, tons,
            categoria_principal:categoria_principal_id ( id, nome ),
            momento:momento_culto_id ( id, nome ),
-           estilo:estilo_id ( id, nome )`,
+           estilo:estilo_id ( id, nome, cor, legenda )`,
         )
         .eq('igreja_id', user.igrejaId)
         .order('nome', { ascending: true })
@@ -395,7 +404,17 @@ export function Musicas({
               <h2 className="text-sm font-semibold text-gray-800">Músicas</h2>
             </div>
           </div>
-          {/* ... (rest of the code remains the same) */}
+          {estilosComCor.length > 0 && (
+            <IonButton
+              fill="clear"
+              size="small"
+              onClick={() => setShowLegenda(true)}
+              aria-label="Legenda de cores"
+              className="m-0"
+            >
+              <IonIcon slot="icon-only" icon={informationCircleOutline} />
+            </IonButton>
+          )}
         </div>
 
         {/* Busca e Ordenação */}
@@ -729,23 +748,34 @@ export function Musicas({
                             <p className="text-[13px] font-bold text-slate-100 truncate">{m.nome}</p>
                             {(() => {
                               const info = [m.categoria_principal?.nome, m.momento?.nome, m.estilo?.nome].filter(Boolean)
-                              if (info.length === 0) return null
+                              if (info.length === 0 && !m.estilo?.cor) return null
                               return (
-                                <p
-                                  className="mt-1 text-[10px] text-slate-400 leading-none"
-                                  style={{
-                                    transform: 'scale(0.75)',
-                                    transformOrigin: 'left top',
-                                    display: 'block',
-                                    width: '133.3333%',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    lineHeight: '1',
-                                  }}
-                                >
-                                  {info.join(' • ')}
-                                </p>
+                                <div className="mt-1 flex items-center gap-1">
+                                  {m.estilo?.cor && (
+                                    <span
+                                      className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                      style={{ backgroundColor: m.estilo.cor }}
+                                      title={m.estilo.legenda ?? m.estilo.nome}
+                                    />
+                                  )}
+                                  {info.length > 0 && (
+                                    <p
+                                      className="text-[10px] text-slate-400 leading-none"
+                                      style={{
+                                        transform: 'scale(0.75)',
+                                        transformOrigin: 'left top',
+                                        display: 'block',
+                                        width: '133.3333%',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        lineHeight: '1',
+                                      }}
+                                    >
+                                      {info.join(' • ')}
+                                    </p>
+                                  )}
+                                </div>
                               )
                             })()}
 
@@ -1023,6 +1053,43 @@ export function Musicas({
           },
         ]}
       />
+
+      {/* Modal de Legenda de Estilos */}
+      <IonModal isOpen={showLegenda} onDidDismiss={() => setShowLegenda(false)}>
+        <IonHeader>
+          <IonToolbar>
+            <IonTitle>Legenda de Estilos</IonTitle>
+            <IonButtons slot="end">
+              <IonButton onClick={() => setShowLegenda(false)}>Fechar</IonButton>
+            </IonButtons>
+          </IonToolbar>
+        </IonHeader>
+        <IonContent className="ion-padding">
+          {estilosComCor.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center mt-8">Nenhum estilo com cor definida.</p>
+          ) : (
+            <div className="space-y-1 pt-2">
+              {estilosComCor.map((e) => (
+                <div
+                  key={e.id}
+                  className="flex items-start gap-3 py-3 border-b border-slate-200 dark:border-slate-700 last:border-0"
+                >
+                  <span
+                    className="w-5 h-5 rounded-full flex-shrink-0 mt-0.5 shadow-sm"
+                    style={{ backgroundColor: e.cor! }}
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{e.nome}</p>
+                    {e.legenda && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{e.legenda}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </IonContent>
+      </IonModal>
     </main>
   )
 }

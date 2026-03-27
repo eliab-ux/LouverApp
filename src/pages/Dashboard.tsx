@@ -886,7 +886,7 @@ export function Dashboard({ user }: { user: AppUser }) {
     try {
       const { data, error } = await supabase
         .from('estilos')
-        .select('id, nome')
+        .select('id, nome, cor, legenda')
         .eq('igreja_id', user.igrejaId)
         .order('nome', { ascending: true })
 
