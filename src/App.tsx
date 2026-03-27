@@ -9,6 +9,7 @@ import type { AppUser } from './types'
 import { Login } from './pages/Login'
 import { ResetPassword } from './pages/ResetPassword'
 import { AcceptInvite } from './pages/AcceptInvite'
+import { PrivacyPolicy } from './pages/PrivacyPolicy'
 import { Dashboard } from './pages/Dashboard'
 import { SuperAdminDashboard } from './pages/SuperAdminDashboard'
 
@@ -148,6 +149,11 @@ function App() {
       void carregarSessao()
     }
   }, [isResetPassword, isInvite])
+
+  // Página pública — acessível sem autenticação
+  if (window.location.pathname === '/privacidade') {
+    return <PrivacyPolicy />
+  }
 
   // Se for página de reset, mostrar diretamente sem carregar sessão
   if (isResetPassword) {

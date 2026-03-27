@@ -619,8 +619,16 @@ export function Login({ onAuthSuccess }: AuthScreenProps) {
               </IonCardContent>
             </IonCard>
 
-            <div className="text-center text-[0.7rem] text-gray-400 mt-4">
-              © {new Date().getFullYear()} LouvorAPP (PSI Equipamentos)
+            <div className="text-center text-[0.7rem] text-gray-400 mt-4 space-y-1">
+              <div>© {new Date().getFullYear()} LouvorAPP (PSI Equipamentos)</div>
+              <div>
+                <a
+                  href="/privacidade"
+                  className="text-indigo-400 hover:text-indigo-600 underline underline-offset-2"
+                >
+                  Política de Privacidade
+                </a>
+              </div>
             </div>
           </div>
         </div>
