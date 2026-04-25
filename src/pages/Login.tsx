@@ -184,7 +184,10 @@ export function Login({ onAuthSuccess }: AuthScreenProps) {
           if (rpcError || !(rpcResult as { success: boolean } | null)?.success) {
             const msg = rpcError?.message ?? (rpcResult as { error?: string } | null)?.error ?? 'Erro desconhecido'
             console.error('Erro ao criar igreja:', msg)
-            setError('Erro ao criar igreja. Tente novamente.')
+            const userFriendly = msg.includes('foreign key') || msg.includes('fkey')
+              ? 'Este e-mail já está cadastrado. Tente fazer login.'
+              : 'Erro ao criar igreja. Tente novamente.'
+            setError(userFriendly)
             return
           }
 
