@@ -51,7 +51,7 @@ BEGIN
     p_email,
     COALESCE(NULLIF(trim(COALESCE(p_nome_admin, '')), ''), p_email),
     'admin',
-    '[]'::jsonb,
+    ARRAY[]::text[],
     v_igreja_id,
     'ativo'
   )
