@@ -175,6 +175,7 @@ export function Login({ onAuthSuccess }: AuthScreenProps) {
 
           const { data: rpcResult, error: rpcError } = await supabase.rpc('criar_nova_igreja', {
             p_user_id: signUpData.user.id,
+            p_email: email,
             p_nome_igreja: nomeIgreja.trim(),
             p_cnpj: cnpjLimpo,
             p_nome_admin: nomeUsuario.trim(),

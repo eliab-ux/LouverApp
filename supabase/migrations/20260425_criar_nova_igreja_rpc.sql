@@ -4,7 +4,8 @@
 -- chamável pelo role anon sem depender de sessão ativa.
 
 CREATE OR REPLACE FUNCTION public.criar_nova_igreja(
-  p_user_id    uuid,
+  p_user_id     uuid,
+  p_email       text,
   p_nome_igreja text,
   p_cnpj        text DEFAULT NULL,
   p_nome_admin  text DEFAULT NULL
@@ -15,18 +16,11 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_igreja_id              uuid;
-  v_email                  text;
-  v_whatsapp_enabled       boolean := false;
-  v_whatsapp_instance_id   text    := null;
-  v_whatsapp_api_key       text    := null;
+  v_igreja_id            uuid;
+  v_whatsapp_enabled     boolean := false;
+  v_whatsapp_instance_id text    := null;
+  v_whatsapp_api_key     text    := null;
 BEGIN
-  -- Verificar que o user_id existe em auth.users
-  SELECT email INTO v_email FROM auth.users WHERE id = p_user_id;
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Usuario nao encontrado');
-  END IF;
-
   -- Buscar configurações padrão de WhatsApp (SECURITY DEFINER ignora RLS)
   SELECT
     COALESCE(default_whatsapp_enabled, false),
@@ -54,8 +48,8 @@ BEGIN
   INSERT INTO public.usuarios (id, email, nome, papel, funcoes, igreja_id, status)
   VALUES (
     p_user_id,
-    v_email,
-    COALESCE(NULLIF(trim(COALESCE(p_nome_admin, '')), ''), v_email),
+    p_email,
+    COALESCE(NULLIF(trim(COALESCE(p_nome_admin, '')), ''), p_email),
     'admin',
     '[]'::jsonb,
     v_igreja_id,
@@ -74,5 +68,5 @@ EXCEPTION
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.criar_nova_igreja(uuid, text, text, text) TO anon;
-GRANT EXECUTE ON FUNCTION public.criar_nova_igreja(uuid, text, text, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.criar_nova_igreja(uuid, text, text, text, text) TO anon;
+GRANT EXECUTE ON FUNCTION public.criar_nova_igreja(uuid, text, text, text, text) TO authenticated;
