@@ -835,6 +835,49 @@ function EscalaPage({ user, handleSignOut }: { user: AppUser; handleSignOut: () 
   )
 }
 
+function AdminPage({
+  user,
+  handleSignOut,
+  categorias,
+  momentos,
+  estilos,
+  initialSection,
+  onCategoriasChange,
+  onMomentosChange,
+  onEstilosChange,
+}: {
+  user: AppUser
+  handleSignOut: () => void
+  categorias: Categoria[]
+  momentos: MomentoCulto[]
+  estilos: Estilo[]
+  initialSection: 'categorias' | 'momentos' | 'estilos' | 'membros' | 'importar' | 'notificacoes'
+  onCategoriasChange: () => void
+  onMomentosChange: () => void
+  onEstilosChange: () => void
+}) {
+  useIonViewWillEnter(() => {
+    void onCategoriasChange()
+    void onMomentosChange()
+    void onEstilosChange()
+  })
+
+  return (
+    <DashboardTabPageFrame user={user} handleSignOut={handleSignOut}>
+      <AdminPanel
+        user={user}
+        categorias={categorias}
+        momentos={momentos}
+        estilos={estilos}
+        initialSection={initialSection}
+        onCategoriasChange={onCategoriasChange}
+        onMomentosChange={onMomentosChange}
+        onEstilosChange={onEstilosChange}
+      />
+    </DashboardTabPageFrame>
+  )
+}
+
 export function Dashboard({ user }: { user: AppUser }) {
   const [adminInitialSection, setAdminInitialSection] = useState<
     'categorias' | 'momentos' | 'estilos' | 'membros' | 'importar' | 'notificacoes'
@@ -1057,12 +1100,9 @@ export function Dashboard({ user }: { user: AppUser }) {
             path="/app/admin"
             render={() => (
               user.papel === 'admin' || user.papel === 'lider' ? (
-              <DashboardTabPageFrame
-                user={user}
-                handleSignOut={() => void handleSignOut()}
-              >
-                <AdminPanel
+                <AdminPage
                   user={user}
+                  handleSignOut={() => void handleSignOut()}
                   categorias={categorias}
                   momentos={momentos}
                   estilos={estilos}
@@ -1071,7 +1111,6 @@ export function Dashboard({ user }: { user: AppUser }) {
                   onMomentosChange={carregarMomentos}
                   onEstilosChange={carregarEstilos}
                 />
-              </DashboardTabPageFrame>
               ) : (
                 <Redirect to="/app/inicio" />
               )
